@@ -13,6 +13,11 @@ interface HoverState {
   index: number;
 }
 
+interface PopupPosition {
+  top: number;
+  left: number;
+}
+
 /**
  * Engine UI panel: toggle, gear settings panel, and collapsible PV lines.
  */
@@ -43,7 +48,7 @@ export function EngineLines() {
   const [showSettings, setShowSettings] = useState(false);
   const [expandedLines, setExpandedLines] = useState<Set<number>>(new Set());
   const [hoverState, setHoverState] = useState<HoverState | null>(null);
-  const [popupTop, setPopupTop] = useState(0);
+  const [popupPos, setPopupPos] = useState<PopupPosition>({ top: 0, left: 0 });
 
   const orientation = useGameStore((s) => s.orientation);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +85,7 @@ export function EngineLines() {
   // Non-passive wheel listener: when a line is being previewed, scroll the
   // move index instead of scrolling the lines list.
   useEffect(() => {
+    if (!enabled) return;
     const el = linesRef.current;
     if (!el) return;
     function onWheel(e: WheelEvent) {
@@ -95,7 +101,7 @@ export function EngineLines() {
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, []);
+  }, [enabled]);
 
   // Close settings when clicking outside.
   useEffect(() => {
@@ -249,12 +255,14 @@ export function EngineLines() {
                 key={pv.multipv}
                 className={`engine__line ${isExpanded ? 'is-expanded' : ''}`}
                 onMouseEnter={(e) => {
-                  const container = containerRef.current;
-                  if (container) {
-                    const lineRect = e.currentTarget.getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-                    setPopupTop(lineRect.bottom - containerRect.top + 6);
-                  }
+                  const lineRect = e.currentTarget.getBoundingClientRect();
+                  const popupSize = 300;
+                  const pad = 8;
+                  const leftUnclamped = lineRect.left;
+                  const topUnclamped = lineRect.bottom + 6;
+                  const left = Math.max(pad, Math.min(window.innerWidth - popupSize - pad, leftUnclamped));
+                  const top = Math.max(pad, Math.min(window.innerHeight - popupSize - pad, topUnclamped));
+                  setPopupPos({ top, left });
                   setPreviewState({ lineKey: pv.multipv, boards, index: 0 });
                 }}
                 onMouseLeave={() => {
@@ -309,7 +317,7 @@ export function EngineLines() {
           index={hoverState.index}
           lineKey={hoverState.lineKey}
           orientation={orientation}
-          style={{ top: popupTop }}
+          style={{ top: popupPos.top, left: popupPos.left }}
         />
       )}
     </div>

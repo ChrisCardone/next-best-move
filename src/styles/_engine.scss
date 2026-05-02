@@ -266,10 +266,11 @@
   }
 
   &__line {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.3rem 0.5rem;
+    padding: 0.3rem 1.9rem 0.3rem 0.5rem;
     background: $bg-panel-alt;
     border-radius: $radius;
     font-size: 1.05em;
@@ -354,6 +355,9 @@
   }
 
   &__expand {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.4rem;
     background: transparent;
     border: 0;
     color: $text-muted;
@@ -363,9 +367,9 @@
     line-height: 1;
     caret-color: transparent;
     flex-shrink: 0;
-    margin-left: auto;
     transition: transform 150ms;
     transform-origin: center;
+    z-index: 1;
 
     &.is-expanded {
       transform: rotate(180deg);
@@ -377,8 +381,8 @@
   }
 
   &__pv-board {
-    // Positioned absolutely below the currently hovered engine line.
-    position: absolute;
+    // Portaled to body and positioned in viewport coords.
+    position: fixed;
     width: 300px;
     height: 300px;
     top: 0;
@@ -387,7 +391,7 @@
     overflow: hidden;
     flex-shrink: 0;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    z-index: 100;
+    z-index: 5000;
     pointer-events: none;
 
     // Chessground requires the .cg-wrap to have an explicit size.

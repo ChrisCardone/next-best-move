@@ -3,7 +3,7 @@
 .movelist {
   background: $bg-panel;
   border-radius: $radius;
-  padding: 0.5rem;
+  padding: 0.25rem;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -16,33 +16,122 @@
     text-align: center;
   }
 
-  &__line {
-    line-height: 1.6;
-    word-spacing: 0;
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding-bottom: 0.25rem;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    min-height: 2.15rem;
+    padding: 0 0.15rem;
+    border-radius: 0;
+
+    &--light {
+      background: #343434;
+    }
+
+    &--dark {
+      background: #252525;
+    }
   }
 
   &__num {
     color: $move-number;
-    margin-right: 2px;
-    margin-left: 4px;
-    font-size: 0.9em;
+    font-weight: 700;
+    font-size: 1.05em;
+    text-align: left;
     user-select: none;
-
-    &:first-child {
-      margin-left: 0;
-    }
+    padding-left: 0.35rem;
   }
 
-  &__variation {
-    display: block;
+  &__cell {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 0.1rem;
+  }
+
+  &__ellipsis {
     color: $text-muted;
-    font-size: 0.92em;
-    margin: 0.15rem 0 0.15rem 1.25rem;
-    padding-left: 0.5rem;
-    border-left: 2px solid $border;
+    font-weight: 600;
+    opacity: 0.75;
+    padding: 0 0.35rem;
+  }
+
+  &__variation-row {
+    margin: 0.08rem 0.35rem 0.12rem calc(1.2rem + var(--var-depth, 1) * 0.95rem);
+    padding: 0.16rem 0.35rem 0.18rem;
+    border-left: 2px solid color-mix(in srgb, $border-strong 70%, transparent);
+    border-radius: 2px;
+    color: $text-muted;
+    line-height: 1.5;
+    overflow: hidden;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -2px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: color-mix(in srgb, $accent-blue 45%, $border);
+      opacity: 0.85;
+    }
+
+    &--light {
+      background: #343434;
+    }
+
+    &--dark {
+      background: #252525;
+    }
 
     .move {
       color: $text-muted;
+      padding: 1px 3px;
+    }
+
+    .move.is-active {
+      color: $move-active-text;
+    }
+  }
+
+  &__variation-content {
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+
+  &__variation-num {
+    color: $move-number;
+    font-size: 0.9em;
+    font-weight: 700;
+    margin: 0 0.2rem;
+  }
+
+  &__variation-move {
+    margin-right: 0.15rem;
+  }
+
+  &__comment-inline {
+    color: $text-muted;
+    font-style: italic;
+    font-size: 0.9em;
+    margin-left: 0.35rem;
+  }
+
+  @media (max-width: 500px) {
+    &__row {
+      grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    &__num {
+      padding-left: 0.2rem;
     }
   }
 
@@ -56,12 +145,34 @@
     font-size: 0.92em;
   }
 
-  &__comment-inline {
-    color: $text-muted;
-    font-style: italic;
-    font-size: 0.92em;
-    margin: 0 0.25rem;
+  &__context-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 170px;
+    background: $bg-panel-alt;
+    border: 1px solid $border-strong;
+    border-radius: 4px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    padding: 0.2rem;
   }
+
+  &__context-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 3px;
+    color: $text-primary;
+    font: inherit;
+    padding: 0.35rem 0.45rem;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, $accent-red 18%, $bg-panel-alt);
+      color: $text-strong;
+    }
+  }
+
 }
 
 .move {
@@ -69,12 +180,14 @@
   border: 0;
   color: $text-strong;
   font: inherit;
-  font-weight: 500;
-  padding: 1px 4px;
-  margin: 0 1px;
-  border-radius: 2px;
+  font-weight: 700;
+  padding: 4px 6px;
+  margin: 0;
+  border-radius: 3px;
   cursor: pointer;
-  transition: background-color 80ms ease;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 80ms ease, color 80ms ease;
 
   &:hover {
     background: $move-hover-bg;

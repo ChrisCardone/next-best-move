@@ -74,56 +74,125 @@ button,
 
   &__main {
     flex: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: $gap;
+    position: relative;
+    isolation: isolate;
+    display: block;
     padding: $gap;
     min-height: 0;
-
-    @media (max-width: 900px) {
-      grid-template-columns: 1fr;
-    }
   }
 
   &__board {
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 100%;
+    width: 100%;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
     container-type: size;
   }
+}
 
-  &__side {
+.floating-panels {
+  position: absolute;
+  inset: $gap;
+  z-index: 180;
+  pointer-events: none;
+}
+
+.floating-panel {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  border-radius: 8px;
+  border: 1px solid $border-strong;
+  background: color-mix(in srgb, $bg-panel 88%, #000 12%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+
+  &__header {
+    height: 30px;
+    padding: 0 0.6rem;
     display: flex;
-    flex-direction: column;
-    gap: 0;
+    align-items: center;
+    border-bottom: 1px solid $border;
+    background: color-mix(in srgb, $bg-panel-alt 70%, #000 30%);
+    cursor: grab;
+    user-select: none;
+  }
+
+  &__header:active {
+    cursor: grabbing;
+  }
+
+  &__title {
+    color: $text-muted;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &__body {
+    flex: 1;
     min-height: 0;
+    display: flex;
+    overflow: hidden;
+
+    > * {
+      flex: 1;
+      min-height: 0;
+    }
+  }
+
+  &__resize {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 12px;
+    border: 0;
+    border-top: 1px solid $border;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, $bg-panel-alt 55%, transparent),
+      color-mix(in srgb, $bg-panel 70%, transparent)
+    );
+    cursor: ns-resize;
+    padding: 0;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 3px;
+      width: 40px;
+      height: 4px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: color-mix(in srgb, $text-muted 55%, transparent);
+    }
+
+    &:hover::before {
+      background: color-mix(in srgb, $accent-blue 60%, $text-muted 40%);
+    }
   }
 }
 
-.resizable-panel {
-  flex-shrink: 1;
-  flex-basis: 0;
-  min-height: 40px;
+.floating-panel--engine {
   overflow: visible;
-  display: flex;
-  flex-direction: column;
 }
 
-.resize-handle {
-  flex: 0 0 6px;
-  cursor: ns-resize;
-  background: $border;
-  border-radius: 3px;
-  margin: 2px 0;
-  opacity: 0.5;
-  transition: opacity 120ms, background-color 120ms;
+.floating-panel--engine .floating-panel__body {
+  overflow: visible;
+}
 
-  &:hover {
-    opacity: 1;
-    background: $accent-blue;
+@media (max-width: 900px) {
+  .floating-panels {
+    inset: 0.35rem;
   }
 }
 

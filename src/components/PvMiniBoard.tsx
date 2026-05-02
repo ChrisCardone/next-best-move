@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Chessground } from '@lichess-org/chessground';
 import type { Api as CgApi } from '@lichess-org/chessground/api';
 import type { Key } from '@lichess-org/chessground/types';
@@ -93,9 +94,11 @@ export function PvMiniBoard({ boards, index, lineKey, orientation, style }: Prop
     prevRef.current = { lineKey, index };
   }, [boards, index, lineKey, orientation]);
 
-  return (
+  const content = (
     <div className="engine__pv-board" style={style}>
       <div ref={containerRef} className="cg-wrap lichess-brown" />
     </div>
   );
+
+  return createPortal(content, document.body);
 }

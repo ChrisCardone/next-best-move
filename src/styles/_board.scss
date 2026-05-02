@@ -10,6 +10,7 @@ $clock-total: calc(2 * #{$clock-h} + 2 * #{$clock-gap});
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: $clock-gap;
   height: 100%;
   width: 100%;
@@ -27,6 +28,8 @@ $clock-total: calc(2 * #{$clock-h} + 2 * #{$clock-gap});
   position: relative;
   aspect-ratio: 1 / 1;
   height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
   transition: opacity 200ms ease, filter 200ms ease;
 
   &--variation {
@@ -40,6 +43,17 @@ $clock-total: calc(2 * #{$clock-h} + 2 * #{$clock-gap});
   position: relative;
   display: block;
   container-type: size;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.cg-wrap cg-container,
+.cg-wrap cg-board {
+  border-radius: inherit;
+}
+
+.cg-wrap cg-container {
+  overflow: hidden;
 }
 
 .cg-wrap.lichess-brown cg-board {
