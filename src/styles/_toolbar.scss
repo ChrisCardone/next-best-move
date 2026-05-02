@@ -1,0 +1,329 @@
+@use 'theme' as *;
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.4rem;
+  background: $bg-panel;
+  border-radius: $radius;
+  flex-wrap: wrap;
+
+  &__sep {
+    width: 1px;
+    height: 1.4em;
+    background: $border;
+    margin: 0 4px;
+  }
+
+  &__btn {
+    background: $bg-panel-alt;
+    border: 1px solid $border;
+    color: $text-primary;
+    padding: 0.35rem 0.6rem;
+    border-radius: $radius;
+    font: inherit;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background-color 80ms;
+    line-height: 1;
+
+    &:hover {
+      background: $border;
+    }
+
+    &--primary {
+      background: $accent-blue;
+      border-color: $accent-blue;
+      color: #fff;
+
+      &:hover {
+        filter: brightness(1.1);
+        background: $accent-blue;
+      }
+    }
+
+    &--danger {
+      &:hover {
+        background: $accent-red;
+        color: #fff;
+        border-color: $accent-red;
+      }
+    }
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: $bg-panel;
+  border: 1px solid $border;
+  border-radius: $radius;
+  padding: 1rem;
+  width: min(640px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0;
+
+    h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      color: $text-strong;
+    }
+  }
+
+  &__close {
+    background: transparent;
+    border: 0;
+    color: $text-muted;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+
+    &:hover {
+      color: $text-strong;
+    }
+  }
+
+  &__textarea {
+    background: $bg-input;
+    color: $text-strong;
+    border: 1px solid $border;
+    border-radius: $radius;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+    min-height: 220px;
+    resize: vertical;
+
+    &:focus {
+      outline: 1px solid $accent-blue;
+      border-color: $accent-blue;
+    }
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__input {
+    background: $bg-input;
+    color: $text-strong;
+    border: 1px solid $border;
+    border-radius: $radius;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+
+    &:focus {
+      outline: 1px solid $accent-blue;
+      border-color: $accent-blue;
+    }
+  }
+
+  &__error {
+    color: $accent-red;
+    margin: 0;
+    font-size: 0.9em;
+  }
+
+  &__selected {
+    color: $text-muted;
+    margin: 0;
+    font-size: 0.86em;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  &__accounts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    background: $bg-input;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 0.5rem;
+  }
+
+  &__account-row {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__account-label {
+    color: $text-muted;
+    font-size: 0.86em;
+    white-space: nowrap;
+  }
+
+  &__recent {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__recent-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  &__recent-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+
+    @media (max-width: 720px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__recent-panel {
+    border: 1px solid $border;
+    border-radius: $radius;
+    background: $bg-panel;
+    padding: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 0;
+  }
+
+  &__recent-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    color: $text-strong;
+    font-size: 0.9em;
+    font-weight: 600;
+  }
+
+  &__recent-user {
+    color: $text-muted;
+    font-size: 0.84em;
+    font-weight: 400;
+    max-width: 56%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 180px;
+    overflow: auto;
+    padding-right: 0.1rem;
+  }
+
+  &__recent-item {
+    border: 1px solid $border;
+    background: $bg-input;
+    border-radius: $radius;
+    color: $text-primary;
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    &:hover {
+      background: $bg-panel-alt;
+      border-color: $border-strong;
+      color: $text-strong;
+    }
+
+    &.is-selected {
+      background: color-mix(in srgb, $accent-blue 28%, $bg-input 72%);
+      border-color: color-mix(in srgb, $accent-blue 65%, $border 35%);
+    }
+  }
+
+  &__recent-item-main {
+    font-size: 0.9em;
+    color: $text-strong;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+
+  &__result-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3em;
+    height: 1.3em;
+    border-radius: 3px;
+    font-size: 0.78em;
+    font-weight: 700;
+    flex-shrink: 0;
+    line-height: 1;
+
+    &--win   { background: #1e5c2e; color: #5dca7a; }
+    &--loss  { background: #5c1e1e; color: #e07070; }
+    &--draw  { background: #3a3a3a; color: #aaaaaa; }
+    &--unknown { background: #2e2e2e; color: #777777; }
+  }
+
+  &__recent-item-sub {
+    font-size: 0.82em;
+    color: $text-muted;
+  }
+
+  &--sm {
+    width: min(340px, 90vw);
+  }
+}
+
+// ── Last-game import buttons ───────────────────────────────────────────────
+
+.toolbar {
+  &__btn--platform {
+    min-width: 2.1rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 1.05em;
+  }
+
+  &__inline-error {
+    color: $accent-red;
+    font-size: 0.82em;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  &__btn--loading {
+    opacity: 0.6;
+    cursor: default;
+  }
+}

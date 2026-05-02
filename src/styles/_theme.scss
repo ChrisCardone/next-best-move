@@ -1,0 +1,60 @@
+// Theme variables — dark-only palette exposed as CSS custom properties.
+// SCSS aliases below let the rest of the stylesheets keep using
+// `$bg-panel` etc.
+
+:root {
+  --bg-page: #24211d;
+  --bg-panel: #2b2a26;
+  --bg-panel-alt: #353430;
+  --bg-input: #1f1e1b;
+
+  --text-primary: #bababa;
+  --text-muted: #8a8a8a;
+  --text-strong: #e8e8e8;
+  --text-accent: #d8a657;
+
+  --border: #3d3c38;
+  --border-strong: #4f4e4a;
+
+  --accent-blue: #3692e7;
+  --accent-green: #629924;
+  --accent-red: #c33;
+
+  --move-active-bg: #3692e7;
+  --move-active-text: #fff;
+  --move-hover-bg: #3d3c38;
+  --move-number: #707070;
+
+  --eval-white: #f0f0f0;
+  --eval-black: #1a1a1a;
+}
+
+// SCSS aliases — every stylesheet uses these.
+$bg-page: var(--bg-page);
+$bg-panel: var(--bg-panel);
+$bg-panel-alt: var(--bg-panel-alt);
+$bg-input: var(--bg-input);
+
+$text-primary: var(--text-primary);
+$text-muted: var(--text-muted);
+$text-strong: var(--text-strong);
+$text-accent: var(--text-accent);
+
+$border: var(--border);
+$border-strong: var(--border-strong);
+
+$accent-blue: var(--accent-blue);
+$accent-green: var(--accent-green);
+$accent-red: var(--accent-red);
+
+$move-active-bg: var(--move-active-bg);
+$move-active-text: var(--move-active-text);
+$move-hover-bg: var(--move-hover-bg);
+$move-number: var(--move-number);
+
+$eval-white: var(--eval-white);
+$eval-black: var(--eval-black);
+
+// Layout (static — not themed)
+$radius: 3px;
+$gap: 0.5rem;
