@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useEngineStore } from '../engine/engineStore';
-import { fenForAnalysis } from '../engine/analysisFen';
 import { useGameStore } from '../game/store';
 import { whiteCp, formatScore } from '../engine/uciParser';
 
@@ -16,16 +15,15 @@ interface EvalSnapshot {
 export function EvalBar() {
   const enabled = useEngineStore((s) => s.enabled);
   const lines = useEngineStore((s) => s.lines);
-  const threatMode = useEngineStore((s) => s.threatMode);
   const analyzedFen = useEngineStore((s) => s.analyzedFen);
   const fen = useGameStore((s) => s.currentFen());
   const position = useGameStore((s) => s.currentPosition());
+  const orientation = useGameStore((s) => s.orientation);
   const [lastEval, setLastEval] = useState<EvalSnapshot | null>(null);
 
   const pv1 = lines.get(1);
-  const expectedFen = fenForAnalysis(fen, threatMode);
-  const isCurrentAnalysis = analyzedFen === expectedFen;
-  const whiteToMove = expectedFen.split(' ')[1] === 'w';
+  const isCurrentAnalysis = analyzedFen === fen;
+  const whiteToMove = fen.split(' ')[1] === 'w';
   const outcome = position.outcome();
 
   let nextEval: EvalSnapshot | null = null;
@@ -62,13 +60,28 @@ export function EvalBar() {
   const label = displayEval?.label ?? '';
 
   const whiteHeight = `${pct}%`;
+  const whiteStyle = orientation === 'black'
+    ? { height: whiteHeight, top: 0, bottom: 'auto' as const }
+    : { height: whiteHeight };
+  const labelPositionClass = orientation === 'black'
+    ? 'evalbar__label--top'
+    : pct >= 50
+      ? 'evalbar__label--bottom'
+      : 'evalbar__label--top';
+  const labelToneClass = orientation === 'black'
+    ? pct >= 50
+      ? 'evalbar__label--dark'
+      : 'evalbar__label--light'
+    : pct >= 50
+      ? 'evalbar__label--dark'
+      : 'evalbar__label--light';
 
   return (
     <div className="evalbar" aria-label="Engine evaluation">
-      <div className="evalbar__white" style={{ height: whiteHeight }} />
+      <div className="evalbar__white" style={whiteStyle} />
       {enabled && label && (
         <span
-          className={`evalbar__label ${pct >= 50 ? 'evalbar__label--bottom' : 'evalbar__label--top'}`}
+          className={`evalbar__label ${labelPositionClass} ${labelToneClass}`}
         >
           {label}
         </span>

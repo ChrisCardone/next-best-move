@@ -1,5 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { useEngineStore } from '../engine/engineStore';
+import { useAnalysisStore } from '../engine/analysisStore';
+import { startRunAnalysis, cancelRunAnalysis } from '../engine/useRunAnalysis';
 import { useGameStore } from '../game/store';
 import { formatScore } from '../engine/uciParser';
 import { pvToSan, type PvBoard } from '../engine/pvToSan';
@@ -22,14 +24,23 @@ interface PopupPosition {
  * Engine UI panel: toggle, gear settings panel, and collapsible PV lines.
  */
 export function EngineLines() {
+  const replayTokenRef = useRef(0);
+  const replayTimeoutRef = useRef<number | null>(null);
+
   const enabled = useEngineStore((s) => s.enabled);
   const multipv = useEngineStore((s) => s.multipv);
   const depth = useEngineStore((s) => s.depth);
+  const analysisStatus = useAnalysisStore((s) => s.status);
   const hashMb = useEngineStore((s) => s.hashMb);
   const analyseMode = useEngineStore((s) => s.analyseMode);
+  const analysisMultiPv = useEngineStore((s) => s.analysisMultiPv);
+  const analysisDepth = useEngineStore((s) => s.analysisDepth);
+  const analysisHashMb = useEngineStore((s) => s.analysisHashMb);
   const threatMode = useEngineStore((s) => s.threatMode);
   const lines = useEngineStore((s) => s.lines);
+  const threatLines = useEngineStore((s) => s.threatLines);
   const analyzedFen = useEngineStore((s) => s.analyzedFen);
+  const threatAnalyzedFen = useEngineStore((s) => s.threatAnalyzedFen);
   const toggle = useEngineStore((s) => s.toggle);
   const showArrows = useEngineStore((s) => s.showArrows);
   const toggleArrows = useEngineStore((s) => s.toggleArrows);
@@ -38,11 +49,15 @@ export function EngineLines() {
   const setDepth = useEngineStore((s) => s.setDepth);
   const setHashMb = useEngineStore((s) => s.setHashMb);
   const setAnalyseMode = useEngineStore((s) => s.setAnalyseMode);
+  const setAnalysisMultiPv = useEngineStore((s) => s.setAnalysisMultiPv);
+  const setAnalysisDepth = useEngineStore((s) => s.setAnalysisDepth);
+  const setAnalysisHashMb = useEngineStore((s) => s.setAnalysisHashMb);
 
   const fen = useGameStore((s) => s.currentFen());
   const playUci = useGameStore((s) => s.playUci);
 
-  const showFen = analyzedFen ?? fen;
+  const activeLines = threatMode ? threatLines : lines;
+  const showFen = (threatMode ? threatAnalyzedFen : analyzedFen) ?? fen;
   const whiteToMove = showFen.split(' ')[1] === 'w';
 
   const [showSettings, setShowSettings] = useState(false);
@@ -116,8 +131,8 @@ export function EngineLines() {
   }, [showSettings]);
 
   const sorted = useMemo(
-    () => Array.from(lines.values()).sort((a, b) => a.multipv - b.multipv),
-    [lines],
+    () => Array.from(activeLines.values()).sort((a, b) => a.multipv - b.multipv),
+    [activeLines],
   );
 
   function toggleExpand(idx: number) {
@@ -128,6 +143,39 @@ export function EngineLines() {
       return next;
     });
   }
+
+  function cancelReplay() {
+    replayTokenRef.current += 1;
+    if (replayTimeoutRef.current !== null) {
+      window.clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
+  }
+
+  function replayLineToIndex(pvMoves: string[], targetIndex: number) {
+    cancelReplay();
+    const token = replayTokenRef.current;
+    let i = 0;
+
+    const step = () => {
+      if (replayTokenRef.current !== token) return;
+      if (i > targetIndex) return;
+
+      const uci = pvMoves[i];
+      if (!uci) return;
+
+      playUci(uci);
+      i += 1;
+
+      if (i <= targetIndex) {
+        replayTimeoutRef.current = window.setTimeout(step, 230);
+      }
+    };
+
+    step();
+  }
+
+  useEffect(() => () => cancelReplay(), []);
 
   return (
     <div ref={containerRef} className="engine__container">
@@ -169,6 +217,17 @@ export function EngineLines() {
             aria-label={showArrows ? 'Hide board arrows' : 'Show board arrows'}
           >
             ↗
+          </button>
+        )}
+        {enabled && (
+          <button
+            type="button"
+            className={`engine__run-analysis${analysisStatus === 'running' ? ' is-running' : ''}`}
+            onClick={analysisStatus === 'running' ? cancelRunAnalysis : startRunAnalysis}
+            title={analysisStatus === 'running' ? 'Cancel analysis' : 'Analyze full game'}
+            aria-label={analysisStatus === 'running' ? 'Cancel analysis' : 'Run Analysis'}
+          >
+            {analysisStatus === 'running' ? '■' : '⚡'}
           </button>
         )}
         {enabled && (
@@ -233,6 +292,47 @@ export function EngineLines() {
                     onChange={(e) => setAnalyseMode(e.target.checked)}
                   />
                 </div>
+                <div className="engine__settings-section-label">Run Analysis</div>
+                <div className="engine__settings-row">
+                  <label htmlFor="eng-analysis-multipv">Lines</label>
+                  <input
+                    id="eng-analysis-multipv"
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={1}
+                    value={analysisMultiPv}
+                    onChange={(e) => setAnalysisMultiPv(parseInt(e.target.value, 10))}
+                  />
+                  <span className="engine__settings-val">{analysisMultiPv}</span>
+                </div>
+                <div className="engine__settings-row">
+                  <label htmlFor="eng-analysis-depth">Depth</label>
+                  <input
+                    id="eng-analysis-depth"
+                    type="range"
+                    min={1}
+                    max={99}
+                    step={1}
+                    value={analysisDepth}
+                    onChange={(e) => setAnalysisDepth(parseInt(e.target.value, 10))}
+                  />
+                  <span className="engine__settings-val">{analysisDepth}</span>
+                </div>
+                <div className="engine__settings-row">
+                  <label htmlFor="eng-analysis-hash">Hash</label>
+                  <select
+                    id="eng-analysis-hash"
+                    value={analysisHashMb}
+                    onChange={(e) => setAnalysisHashMb(parseInt(e.target.value, 10))}
+                  >
+                    {HASH_OPTIONS.map((mb) => (
+                      <option key={`analysis-${mb}`} value={mb}>
+                        {mb} MB
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -278,8 +378,6 @@ export function EngineLines() {
                     const moveNum = Math.floor(ply / 2) + 1;
                     const prefix =
                       isWhite ? `${moveNum}.` : i === 0 ? `${moveNum}…` : '';
-                    const uci = pv.pv[i];
-                    const isFirst = i === 0;
                     return (
                       <span key={i} className="engine__movepair">
                         {prefix && (
@@ -288,8 +386,8 @@ export function EngineLines() {
                         <button
                           type="button"
                           className="engine__san"
-                          onClick={() => isFirst && playUci(uci)}
-                          title={isFirst ? 'Play this move' : undefined}
+                          onClick={() => replayLineToIndex(pv.pv, i)}
+                          title="Go to this position"
                         >
                           {san}
                         </button>

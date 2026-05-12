@@ -10,10 +10,17 @@ interface EngineState {
   depth: number;
   hashMb: number;
   analyseMode: boolean;
+  analysisMultiPv: number;
+  analysisDepth: number;
+  analysisHashMb: number;
   /** Lines keyed by multipv index (1-based), most recent info per slot. */
   lines: Map<number, PvLine>;
   /** FEN the current `lines` correspond to. */
   analyzedFen: string | null;
+  /** Threat lines keyed by multipv index (1-based). */
+  threatLines: Map<number, PvLine>;
+  /** FEN the current `threatLines` correspond to. */
+  threatAnalyzedFen: string | null;
 
   toggle(): void;
   toggleArrows(): void;
@@ -22,9 +29,15 @@ interface EngineState {
   setDepth(n: number): void;
   setHashMb(n: number): void;
   setAnalyseMode(b: boolean): void;
+  setAnalysisMultiPv(n: number): void;
+  setAnalysisDepth(n: number): void;
+  setAnalysisHashMb(n: number): void;
   updateLine(line: PvLine): void;
   setAnalyzedFen(fen: string | null): void;
   clearLines(): void;
+  updateThreatLine(line: PvLine): void;
+  setThreatAnalyzedFen(fen: string | null): void;
+  clearThreatLines(): void;
 }
 
 export const useEngineStore = create<EngineState>()(
@@ -37,8 +50,13 @@ export const useEngineStore = create<EngineState>()(
       depth: 24,
       hashMb: 16,
       analyseMode: true,
+      analysisMultiPv: 1,
+      analysisDepth: 18,
+      analysisHashMb: 64,
       lines: new Map(),
       analyzedFen: null,
+      threatLines: new Map(),
+      threatAnalyzedFen: null,
 
       toggle: () =>
         set((s) => {
@@ -46,7 +64,13 @@ export const useEngineStore = create<EngineState>()(
           // Clear lines when turning off.
           return enabled
             ? { enabled }
-            : { enabled, lines: new Map(), analyzedFen: null };
+            : {
+                enabled,
+                lines: new Map(),
+                analyzedFen: null,
+                threatLines: new Map(),
+                threatAnalyzedFen: null,
+              };
         }),
 
       toggleArrows: () => set((s) => ({ showArrows: !s.showArrows })),
@@ -55,6 +79,9 @@ export const useEngineStore = create<EngineState>()(
       setDepth: (n) => set({ depth: n }),
       setHashMb: (n) => set({ hashMb: n }),
       setAnalyseMode: (b) => set({ analyseMode: b }),
+      setAnalysisMultiPv: (n) => set({ analysisMultiPv: Math.max(1, Math.min(5, n)) }),
+      setAnalysisDepth: (n) => set({ analysisDepth: n }),
+      setAnalysisHashMb: (n) => set({ analysisHashMb: n }),
       updateLine: (line) =>
         set((s) => {
           const next = new Map(s.lines);
@@ -63,6 +90,14 @@ export const useEngineStore = create<EngineState>()(
         }),
       setAnalyzedFen: (fen) => set({ analyzedFen: fen }),
       clearLines: () => set({ lines: new Map() }),
+      updateThreatLine: (line) =>
+        set((s) => {
+          const next = new Map(s.threatLines);
+          next.set(line.multipv, line);
+          return { threatLines: next };
+        }),
+      setThreatAnalyzedFen: (fen) => set({ threatAnalyzedFen: fen }),
+      clearThreatLines: () => set({ threatLines: new Map() }),
     }),
     {
       name: 'nbm-engine-settings',
@@ -74,6 +109,9 @@ export const useEngineStore = create<EngineState>()(
         depth: state.depth,
         hashMb: state.hashMb,
         analyseMode: state.analyseMode,
+        analysisMultiPv: state.analysisMultiPv,
+        analysisDepth: state.analysisDepth,
+        analysisHashMb: state.analysisHashMb,
       }),
     },
   ),

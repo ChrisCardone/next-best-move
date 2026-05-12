@@ -20,8 +20,10 @@ export function useEngine(): void {
   const threatMode = useEngineStore((s) => s.threatMode);
   const fen = useGameStore((s) => s.currentFen());
 
-  const serviceRef = useRef<StockfishService | null>(null);
-  const debounceRef = useRef<number | null>(null);
+  const mainServiceRef = useRef<StockfishService | null>(null);
+  const threatServiceRef = useRef<StockfishService | null>(null);
+  const mainDebounceRef = useRef<number | null>(null);
+  const threatDebounceRef = useRef<number | null>(null);
   const lastFenRef = useRef(fen);
 
   // Worker lifecycle.
@@ -37,7 +39,7 @@ export function useEngine(): void {
       if (cancelled) return;
 
       const svc = new StockfishService();
-      serviceRef.current = svc;
+      mainServiceRef.current = svc;
 
       unsubscribe = svc.onLine((line) => {
         const info = parseInfo(line);
@@ -58,24 +60,26 @@ export function useEngine(): void {
       // Kick off initial analysis.
       const currentFen = useGameStore.getState().currentFen();
       const s = useEngineStore.getState();
-      const effectiveFen = fenForAnalysis(currentFen, s.threatMode);
       useEngineStore.getState().clearLines();
-      useEngineStore.getState().setAnalyzedFen(effectiveFen);
-      svc.analyze(effectiveFen, s.multipv, s.depth, s.hashMb, s.analyseMode);
+      useEngineStore.getState().setAnalyzedFen(currentFen);
+      svc.analyze(currentFen, s.multipv, s.depth, s.hashMb, s.analyseMode);
     })();
 
     return () => {
       cancelled = true;
       unsubscribe?.();
-      serviceRef.current?.destroy();
-      serviceRef.current = null;
+      mainServiceRef.current?.destroy();
+      mainServiceRef.current = null;
+      threatServiceRef.current?.destroy();
+      threatServiceRef.current = null;
       useEngineStore.getState().clearLines();
       useEngineStore.getState().setAnalyzedFen(null);
+      useEngineStore.getState().clearThreatLines();
+      useEngineStore.getState().setThreatAnalyzedFen(null);
     };
   }, [enabled]);
 
-  // Re-analyze on fen / multipv change. Debounced to avoid thrashing during
-  // rapid keyboard navigation.
+  // Re-analyze main engine on fen / settings change.
   useEffect(() => {
     const fenChanged = lastFenRef.current !== fen;
     if (fenChanged) {
@@ -87,24 +91,105 @@ export function useEngine(): void {
     }
 
     if (!enabled) return;
-    const svc = serviceRef.current;
+    const svc = mainServiceRef.current;
     if (!svc) return;
 
-    if (debounceRef.current !== null) {
-      window.clearTimeout(debounceRef.current);
+    if (mainDebounceRef.current !== null) {
+      window.clearTimeout(mainDebounceRef.current);
     }
-    debounceRef.current = window.setTimeout(() => {
-      const effectiveFen = fenForAnalysis(fen, threatMode);
+    mainDebounceRef.current = window.setTimeout(() => {
       useEngineStore.getState().clearLines();
-      useEngineStore.getState().setAnalyzedFen(effectiveFen);
-      svc.analyze(effectiveFen, multipv, depth, hashMb, analyseMode);
+      useEngineStore.getState().setAnalyzedFen(fen);
+      svc.analyze(fen, multipv, depth, hashMb, analyseMode);
     }, 150);
 
     return () => {
-      if (debounceRef.current !== null) {
-        window.clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+      if (mainDebounceRef.current !== null) {
+        window.clearTimeout(mainDebounceRef.current);
+        mainDebounceRef.current = null;
       }
     };
   }, [enabled, fen, multipv, depth, hashMb, analyseMode, threatMode]);
+
+  // Threat worker lifecycle: lazy-create only while threat mode is enabled.
+  useEffect(() => {
+    if (!enabled || !threatMode) {
+      if (threatDebounceRef.current !== null) {
+        window.clearTimeout(threatDebounceRef.current);
+        threatDebounceRef.current = null;
+      }
+      threatServiceRef.current?.destroy();
+      threatServiceRef.current = null;
+      useEngineStore.getState().clearThreatLines();
+      useEngineStore.getState().setThreatAnalyzedFen(null);
+      return;
+    }
+
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
+    (async () => {
+      const { StockfishService } = await import('./stockfish');
+      if (cancelled) return;
+
+      const svc = new StockfishService();
+      threatServiceRef.current = svc;
+
+      unsubscribe = svc.onLine((line) => {
+        const info = parseInfo(line);
+        if (info) useEngineStore.getState().updateThreatLine(info);
+      });
+
+      try {
+        await svc.start();
+      } catch (err) {
+        console.error('[engine:threat] failed to start:', err);
+        return;
+      }
+      if (cancelled) {
+        svc.destroy();
+        return;
+      }
+
+      const currentFen = useGameStore.getState().currentFen();
+      const s = useEngineStore.getState();
+      const threatFen = fenForAnalysis(currentFen, true);
+      useEngineStore.getState().clearThreatLines();
+      useEngineStore.getState().setThreatAnalyzedFen(threatFen);
+      svc.analyze(threatFen, s.multipv, s.depth, s.hashMb, s.analyseMode);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+      threatServiceRef.current?.destroy();
+      threatServiceRef.current = null;
+      useEngineStore.getState().clearThreatLines();
+      useEngineStore.getState().setThreatAnalyzedFen(null);
+    };
+  }, [enabled, threatMode]);
+
+  // Re-analyze threat worker on fen / settings change while threat mode is on.
+  useEffect(() => {
+    if (!enabled || !threatMode) return;
+    const svc = threatServiceRef.current;
+    if (!svc) return;
+
+    if (threatDebounceRef.current !== null) {
+      window.clearTimeout(threatDebounceRef.current);
+    }
+    threatDebounceRef.current = window.setTimeout(() => {
+      const threatFen = fenForAnalysis(fen, true);
+      useEngineStore.getState().clearThreatLines();
+      useEngineStore.getState().setThreatAnalyzedFen(threatFen);
+      svc.analyze(threatFen, multipv, depth, hashMb, analyseMode);
+    }, 150);
+
+    return () => {
+      if (threatDebounceRef.current !== null) {
+        window.clearTimeout(threatDebounceRef.current);
+        threatDebounceRef.current = null;
+      }
+    };
+  }, [enabled, threatMode, fen, multipv, depth, hashMb, analyseMode]);
 }

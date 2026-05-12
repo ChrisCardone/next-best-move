@@ -1,0 +1,117 @@
+@use 'theme' as *;
+
+.opening-panel {
+  background: $bg-panel;
+  border-radius: $radius;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  overflow-y: auto;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  &__source {
+    color: $text-muted;
+    font-size: 0.82em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__toggle {
+    background: $bg-input;
+    border: 1px solid $border;
+    color: $text-muted;
+    border-radius: $radius;
+    padding: 0.12rem 0.55rem;
+    font: inherit;
+    font-size: 0.78em;
+    cursor: pointer;
+
+    &:hover {
+      color: $text-strong;
+      border-color: $border-strong;
+    }
+
+    &.is-active {
+      background: $accent-blue;
+      border-color: $accent-blue;
+      color: #fff;
+    }
+  }
+
+  &__loading,
+  &__empty,
+  &__error {
+    color: $text-muted;
+    font-size: 0.88em;
+    padding: 0.4rem;
+    border-radius: $radius;
+    background: color-mix(in srgb, $bg-panel-alt 80%, $bg-panel 20%);
+  }
+
+  &__error {
+    color: $accent-red;
+  }
+
+  &__content {
+    color: $text-primary;
+    font-size: 0.9em;
+    line-height: 1.4;
+
+    p,
+    ul,
+    ol,
+    h2,
+    h3,
+    h4 {
+      margin: 0 0 0.55rem 0;
+    }
+
+    ul,
+    ol {
+      padding-left: 1.2rem;
+    }
+
+    a {
+      color: $accent-blue;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    table {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+
+  &__meta {
+    color: $text-muted;
+    font-size: 0.75em;
+
+    a {
+      color: $accent-blue;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}

@@ -105,6 +105,8 @@ export function Board() {
   const threatMode = useEngineStore((s) => s.threatMode);
   const engineLines = useEngineStore((s) => s.lines);
   const analyzedFen = useEngineStore((s) => s.analyzedFen);
+  const threatLines = useEngineStore((s) => s.threatLines);
+  const threatAnalyzedFen = useEngineStore((s) => s.threatAnalyzedFen);
   const currentFen = useGameStore((s) => s.currentFen());
   const showBestMoveArrow = useExplorerStore((s) => s.showBestMoveArrow);
   const bestMoveFen = useExplorerStore((s) => s.bestMoveFen);
@@ -114,8 +116,10 @@ export function Board() {
     if (!engineEnabled) return { shapes: [], brushes: {} };
     if (!threatMode && !showArrows) return { shapes: [], brushes: {} };
     const expectedFen = fenForAnalysis(currentFen, threatMode);
-    if (!analyzedFen || analyzedFen !== expectedFen) return { shapes: [], brushes: {} };
-    const sorted = Array.from(engineLines.values()).sort(
+    const activeLines = threatMode ? threatLines : engineLines;
+    const activeAnalyzedFen = threatMode ? threatAnalyzedFen : analyzedFen;
+    if (!activeAnalyzedFen || activeAnalyzedFen !== expectedFen) return { shapes: [], brushes: {} };
+    const sorted = Array.from(activeLines.values()).sort(
       (a, b) => a.multipv - b.multipv,
     );
     const topLines = sorted.slice(0, 3);
@@ -125,7 +129,7 @@ export function Board() {
     return threatMode
       ? buildArrowOverlay(topLines, '#882020', 'threatArrow')
       : buildArrowOverlay(topLines, '#003088', 'engineArrow');
-  }, [engineEnabled, showArrows, threatMode, engineLines, analyzedFen, currentFen]);
+  }, [engineEnabled, showArrows, threatMode, engineLines, analyzedFen, threatLines, threatAnalyzedFen, currentFen]);
 
   const explorerOverlay = useMemo<{ shapes: DrawShape[]; brushes: Record<string, DrawBrush> }>(() => {
     if (!showBestMoveArrow) return { shapes: [], brushes: {} as Record<string, DrawBrush> };
