@@ -1,347 +1,80 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Board } from './components/Board';
 import { MoveList } from './components/MoveList';
 import { Toolbar } from './components/Toolbar';
 import { EvalBar } from './components/EvalBar';
 import { EngineLines } from './components/EngineLines';
-import { ExplorerPanel } from './components/ExplorerPanel';
-import { OpeningPanel } from './components/OpeningPanel';
-import { AnalysisPanel } from './components/AnalysisPanel';
 import { PlayerClock } from './components/PlayerClock';
 import { useKeyboardShortcuts } from './game/useKeyboardShortcuts';
 import { useEngine } from './engine/useEngine';
-import { useRunAnalysis } from './engine/useRunAnalysis';
+import { useAnalysisCleanup, startRunAnalysis } from './engine/useRunAnalysis';
 import { useGameStore } from './game/store';
+import { useEngineStore } from './engine/engineStore';
+import { useAnalysisStore } from './engine/analysisStore';
 
-// 2 × 68px clock rows + 2 × 4px gaps (matches $clock-total in _board.scss)
-const CLOCK_TOTAL = 144;
-const PANEL_GAP = 8;
-const PANEL_WIDTH = 360;
-const PANEL_MIN_HEIGHT = 170;
-const PANEL_BASE_Z = 200;
-const PANEL_HEIGHT_WEIGHTS: Record<PanelId, number> = {
-  moves: 1.2,
-  engine: 0.6,
-  explorer: 1.2,
-  opening: 1.05,
-  analysis: 0.9,
-};
-
-type PanelId = 'moves' | 'engine' | 'explorer' | 'opening' | 'analysis';
-
-interface FloatingPanel {
-  id: PanelId;
-  title: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  z: number;
-}
-
-interface ContainerSize {
-  width: number;
-  height: number;
-}
-
-interface DragState {
-  id: PanelId;
-  offsetX: number;
-  offsetY: number;
-}
-
-interface ResizeState {
-  id: PanelId;
-  axis: 'vertical' | 'both';
-  startX: number;
-  startY: number;
-  startWidth: number;
-  startHeight: number;
-}
-
-const PANEL_DEFS: Array<{ id: PanelId; title: string }> = [
-  { id: 'moves', title: 'Moves' },
-  { id: 'engine', title: 'Engine' },
-  { id: 'explorer', title: 'Explorer' },
-  { id: 'opening', title: 'Opening' },
-  { id: 'analysis', title: 'Analysis' },
-];
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function clampPanel(panel: FloatingPanel, size: ContainerSize): FloatingPanel {
-  return {
-    ...panel,
-    x: clamp(panel.x, 0, Math.max(0, size.width - panel.width)),
-    y: clamp(panel.y, 0, Math.max(0, size.height - panel.height)),
+// Dev-only: expose stores + actions on window so we can drive the app from
+// DevTools while debugging. Stripped from production by Vite (`import.meta.env.DEV`).
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__nbm__ = {
+    useGameStore,
+    useEngineStore,
+    useAnalysisStore,
+    startRunAnalysis,
   };
 }
+import { useResizableSections } from './components/useResizableSections';
+import { useWorkspace } from './components/useWorkspace';
+import { WorkspaceTabs, renderWorkspaceContent } from './components/WorkspaceTabs';
+import { useFloatingPanels } from './components/useFloatingPanels';
 
-function panelWidthForContainer(size: ContainerSize): number {
-  return Math.min(PANEL_WIDTH, Math.max(280, size.width - 16));
-}
+type LayoutMode = 'horizontal' | 'vertical';
 
-function buildDefaultPanels(size: ContainerSize, stackHeight: number, boardRight: number): FloatingPanel[] {
-  const width = panelWidthForContainer(size);
-  const panelCount = PANEL_DEFS.length;
-  const maxStack = Math.max(PANEL_MIN_HEIGHT * panelCount + PANEL_GAP * (panelCount - 1), size.height - 16);
-  const desiredStack = stackHeight > 0 ? stackHeight : maxStack;
-  const effectiveStack = Math.min(maxStack, desiredStack);
-  const available = Math.max(0, effectiveStack - PANEL_GAP * (panelCount - 1));
-  const totalWeight = PANEL_DEFS.reduce((sum, def) => sum + PANEL_HEIGHT_WEIGHTS[def.id], 0);
-  const rawHeights = PANEL_DEFS.map((def) => (available * PANEL_HEIGHT_WEIGHTS[def.id]) / totalWeight);
-  const heights = rawHeights.map((height) => Math.max(PANEL_MIN_HEIGHT, Math.floor(height)));
-  let remainder = available - heights.reduce((sum, height) => sum + height, 0);
+function useLayoutMode(): LayoutMode {
+  const [mode, setMode] = useState<LayoutMode>(() =>
+    typeof window !== 'undefined' && window.innerWidth >= window.innerHeight ? 'horizontal' : 'vertical',
+  );
 
-  for (let i = 0; remainder > 0; i = (i + 1) % heights.length) {
-    heights[i] += 1;
-    remainder -= 1;
-  }
-
-  for (let i = heights.length - 1; remainder < 0; i = (i - 1 + heights.length) % heights.length) {
-    const shrinkBy = Math.min(heights[i] - 120, -remainder);
-    if (shrinkBy > 0) {
-      heights[i] -= shrinkBy;
-      remainder += shrinkBy;
-    } else {
-      break;
-    }
-  }
-
-  const laneLeft = Math.max(8, boardRight + 8);
-  const laneRight = Math.max(laneLeft + width, size.width - 8);
-  const laneWidth = Math.max(width, laneRight - laneLeft);
-  const x = clamp(laneLeft + Math.round((laneWidth - width) / 2), 8, Math.max(8, size.width - width - 8));
-  const y = Math.max(8, Math.round((size.height - effectiveStack) / 2));
-
-  let runningY = y;
-  return PANEL_DEFS.map((def, index) => {
-    const panel: FloatingPanel = {
-      id: def.id,
-      title: def.title,
-      x,
-      y: runningY,
-      width,
-      height: heights[index],
-      z: PANEL_BASE_Z + index + 1,
+  useEffect(() => {
+    const onResize = () => {
+      setMode(window.innerWidth >= window.innerHeight ? 'horizontal' : 'vertical');
     };
-    runningY += heights[index] + PANEL_GAP;
-    return clampPanel(panel, size);
-  });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return mode;
 }
 
 export function App() {
   useKeyboardShortcuts();
   useEngine();
-  useRunAnalysis();
+  useAnalysisCleanup();
   const orientation = useGameStore((s) => s.orientation);
   const topSide = orientation === 'white' ? 'black' : 'white';
   const bottomSide = orientation;
 
+  const layoutMode = useLayoutMode();
   const mainRef = useRef<HTMLElement>(null);
-  const boardFrameRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<DragState | null>(null);
-  const resizeRef = useRef<ResizeState | null>(null);
-  const zCounterRef = useRef(PANEL_BASE_Z);
-  const [containerSize, setContainerSize] = useState<ContainerSize>({ width: 0, height: 0 });
-  const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
-  const [boardLeft, setBoardLeft] = useState(0);
-  const [boardRight, setBoardRight] = useState(0);
-  const [boardShift, setBoardShift] = useState(0);
-  const [boardReserveRight, setBoardReserveRight] = useState(0);
-  const [panels, setPanels] = useState<FloatingPanel[]>([]);
 
-  const bringToFront = useCallback((id: PanelId) => {
-    setPanels((prev) => {
-      zCounterRef.current += 1;
-      return prev.map((p) => (p.id === id ? { ...p, z: zCounterRef.current } : p));
-    });
-  }, []);
+  const workspace = useWorkspace();
+  const floats = useFloatingPanels(mainRef);
 
-  const handlePanelHeaderPointerDown = useCallback((id: PanelId, e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    const container = mainRef.current;
-    if (!container) return;
-
-    const panel = panels.find((p) => p.id === id);
-    if (!panel) return;
-
-    e.preventDefault();
-    const rect = container.getBoundingClientRect();
-    dragRef.current = {
-      id,
-      offsetX: e.clientX - rect.left - panel.x,
-      offsetY: e.clientY - rect.top - panel.y,
-    };
-    bringToFront(id);
-  }, [bringToFront, panels]);
-
-  const handlePanelResizePointerDown = useCallback((id: PanelId, e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return;
-    const panel = panels.find((p) => p.id === id);
-    if (!panel) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    resizeRef.current = {
-      id,
-      axis: 'vertical',
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: panel.width,
-      startHeight: panel.height,
-    };
-    bringToFront(id);
-  }, [bringToFront, panels]);
-
-  const handlePanelResizeCornerPointerDown = useCallback((id: PanelId, e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return;
-    const panel = panels.find((p) => p.id === id);
-    if (!panel) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    resizeRef.current = {
-      id,
-      axis: 'both',
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: panel.width,
-      startHeight: panel.height,
-    };
-    bringToFront(id);
-  }, [bringToFront, panels]);
-
-  useEffect(() => {
-    const onPointerMove = (e: PointerEvent) => {
-      const container = mainRef.current;
-      if (!container) return;
-
-      const resize = resizeRef.current;
-      if (resize) {
-        setPanels((prev) => prev.map((panel) => {
-          if (panel.id !== resize.id) return panel;
-          if (resize.axis === 'vertical') {
-            const maxHeight = Math.max(PANEL_MIN_HEIGHT, containerSize.height - panel.y);
-            const nextHeight = clamp(resize.startHeight + (e.clientY - resize.startY), PANEL_MIN_HEIGHT, maxHeight);
-            return { ...panel, height: nextHeight };
-          }
-          if (resize.axis === 'both') {
-            const minWidth = 260;
-            const maxWidth = Math.max(minWidth, containerSize.width - panel.x);
-            const nextWidth = clamp(resize.startWidth + (e.clientX - resize.startX), minWidth, maxWidth);
-
-            const maxHeight = Math.max(PANEL_MIN_HEIGHT, containerSize.height - panel.y);
-            const nextHeight = clamp(resize.startHeight + (e.clientY - resize.startY), PANEL_MIN_HEIGHT, maxHeight);
-
-            return { ...panel, width: nextWidth, height: nextHeight };
-          }
-          const minWidth = 260;
-          const maxWidth = Math.max(minWidth, containerSize.width - panel.x);
-          const nextWidth = clamp(resize.startWidth + (e.clientX - resize.startX), minWidth, maxWidth);
-          return { ...panel, width: nextWidth };
-        }));
-        return;
-      }
-
-      const drag = dragRef.current;
-      if (!drag) return;
-
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left - drag.offsetX;
-      const y = e.clientY - rect.top - drag.offsetY;
-
-      setPanels((prev) => prev.map((panel) => {
-        if (panel.id !== drag.id) return panel;
-        return clampPanel({ ...panel, x, y }, containerSize);
-      }));
-    };
-
-    const onPointerUp = () => {
-      dragRef.current = null;
-      resizeRef.current = null;
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-    };
-  }, [containerSize]);
-
-  useEffect(() => {
-    const container = mainRef.current;
-    if (!container) return;
-    const ro = new ResizeObserver(() => {
-      setContainerSize({ width: container.clientWidth, height: container.clientHeight });
-    });
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const frame = boardFrameRef.current;
-    const container = mainRef.current;
-    if (!frame || !container) return;
-    const ro = new ResizeObserver(() => {
-      setSidebarHeight(frame.offsetHeight + CLOCK_TOTAL);
-      const frameRect = frame.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      setBoardLeft(frameRect.left - containerRect.left);
-      setBoardRight(frameRect.right - containerRect.left);
-    });
-    ro.observe(frame);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (containerSize.width === 0 || containerSize.height === 0 || boardLeft === 0 || boardRight === 0) return;
-
-    if (panels.length === 0) {
-      const minLane = panelWidthForContainer(containerSize) + 16;
-      const naturalLeftGap = Math.max(0, boardLeft - 8);
-      const naturalRightGap = Math.max(0, containerSize.width - boardRight - 8);
-      const missingLane = Math.max(0, minLane - naturalRightGap);
-      const safeShift = Math.min(missingLane, naturalLeftGap);
-      const neededReserve = missingLane - safeShift;
-      const finalBoardRight = Math.max(0, boardRight - safeShift - neededReserve);
-
-      setBoardShift(safeShift);
-      setBoardReserveRight(neededReserve);
-      const defaults = buildDefaultPanels(containerSize, sidebarHeight ?? 0, finalBoardRight);
-      setPanels(defaults);
-      return;
-    }
-    setPanels((prev) => prev.map((panel) => clampPanel(panel, containerSize)));
-  }, [boardLeft, boardRight, containerSize, panels.length, sidebarHeight]);
-
-  function renderPanelContent(id: PanelId) {
-    if (id === 'moves') return <MoveList />;
-    if (id === 'engine') return <EngineLines />;
-    if (id === 'explorer') return <ExplorerPanel />;
-    if (id === 'opening') return <OpeningPanel />;
-    return <AnalysisPanel />;
-  }
+  // Rail section weights: Moves / Engine / Workspace
+  const railSections = useResizableSections([1.1, 0.9, 1.4], 'vertical');
+  // Vertical-layout: Moves and Engine side-by-side. Their split is one handle.
+  const horizSplitWeights = useResizableSections([1, 1], 'horizontal');
 
   return (
-    <div className="app">
+    <div className={`app app--${layoutMode}`}>
       <header className="app__header">
         <h1>Next Best Move</h1>
         <Toolbar />
       </header>
       <main className="app__main" ref={mainRef}>
-        <section
-          className="app__board"
-          aria-label="Chess board"
-          style={boardReserveRight > 0 ? { width: `calc(100% - ${boardReserveRight}px)`, marginRight: 'auto' } : undefined}
-        >
-          <div className="board-column" style={boardShift > 0 ? { transform: `translateX(-${boardShift}px)` } : undefined}>
+        <section className="app__board" aria-label="Chess board">
+          <div className="board-column">
             <PlayerClock side={topSide} />
-            <div className="board-frame" ref={boardFrameRef}>
+            <div className="board-frame">
               <EvalBar />
               <Board />
             </div>
@@ -349,8 +82,109 @@ export function App() {
           </div>
         </section>
 
-        <div className="floating-panels" aria-label="Draggable analysis panels">
-          {panels.map((panel) => (
+        {layoutMode === 'horizontal' ? (
+          <aside
+            className="app__rail app__rail--vertical"
+            ref={railSections.containerRef}
+            aria-label="Analysis rail"
+          >
+            <section
+              className="rail-section rail-section--moves"
+              style={{ flexGrow: railSections.weights[0] }}
+            >
+              <RailHeader title="Moves" />
+              <div className="rail-section__body">
+                <MoveList />
+              </div>
+            </section>
+
+            <div
+              className="rail-handle rail-handle--horizontal"
+              role="separator"
+              aria-orientation="horizontal"
+              onPointerDown={(e) => railSections.handleHandlePointerDown(0, e)}
+            />
+
+            <section
+              className="rail-section rail-section--engine"
+              style={{ flexGrow: railSections.weights[1] }}
+            >
+              <RailHeader title="Engine" />
+              <div className="rail-section__body">
+                <EngineLines />
+              </div>
+            </section>
+
+            <div
+              className="rail-handle rail-handle--horizontal"
+              role="separator"
+              aria-orientation="horizontal"
+              onPointerDown={(e) => railSections.handleHandlePointerDown(1, e)}
+            />
+
+            <section
+              className="rail-section rail-section--workspace"
+              style={{ flexGrow: railSections.weights[2] }}
+            >
+              <div className="rail-section__body rail-section__body--flush">
+                <WorkspaceTabs
+                  activeTab={workspace.activeTab}
+                  poppedOut={workspace.poppedOut}
+                  onSelect={workspace.setActiveTab}
+                  onPopOut={(id) => {
+                    workspace.popOut(id);
+                    floats.openPanel(id);
+                  }}
+                />
+              </div>
+            </section>
+          </aside>
+        ) : (
+          <aside className="app__rail app__rail--below" aria-label="Analysis rail">
+            <div className="rail-row" ref={horizSplitWeights.containerRef}>
+              <section
+                className="rail-section rail-section--moves"
+                style={{ flexGrow: horizSplitWeights.weights[0] }}
+              >
+                <RailHeader title="Moves" />
+                <div className="rail-section__body">
+                  <MoveList />
+                </div>
+              </section>
+              <div
+                className="rail-handle rail-handle--vertical"
+                role="separator"
+                aria-orientation="vertical"
+                onPointerDown={(e) => horizSplitWeights.handleHandlePointerDown(0, e)}
+              />
+              <section
+                className="rail-section rail-section--engine"
+                style={{ flexGrow: horizSplitWeights.weights[1] }}
+              >
+                <RailHeader title="Engine" />
+                <div className="rail-section__body">
+                  <EngineLines />
+                </div>
+              </section>
+            </div>
+            <section className="rail-section rail-section--workspace rail-section--workspace-below">
+              <div className="rail-section__body rail-section__body--flush">
+                <WorkspaceTabs
+                  activeTab={workspace.activeTab}
+                  poppedOut={workspace.poppedOut}
+                  onSelect={workspace.setActiveTab}
+                  onPopOut={(id) => {
+                    workspace.popOut(id);
+                    floats.openPanel(id);
+                  }}
+                />
+              </div>
+            </section>
+          </aside>
+        )}
+
+        <div className="floating-panels" aria-label="Floating workspace pop-outs">
+          {floats.panels.map((panel) => (
             <section
               key={panel.id}
               className={`floating-panel floating-panel--${panel.id}`}
@@ -361,35 +195,48 @@ export function App() {
                 height: panel.height,
                 zIndex: panel.z,
               }}
-              onPointerDown={() => bringToFront(panel.id)}
+              onPointerDown={() => floats.bringToFront(panel.id)}
             >
               <div
                 className="floating-panel__header"
-                onPointerDown={(e) => handlePanelHeaderPointerDown(panel.id, e)}
+                onPointerDown={(e) => floats.handleHeaderPointerDown(panel.id, e)}
               >
                 <span className="floating-panel__title">{panel.title}</span>
+                <button
+                  type="button"
+                  className="floating-panel__close"
+                  title="Return to workspace tabs"
+                  aria-label={`Close ${panel.title} floating panel`}
+                  onClick={() => {
+                    floats.closePanel(panel.id);
+                    workspace.popIn(panel.id);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  ×
+                </button>
               </div>
               <div className="floating-panel__body">
-                {renderPanelContent(panel.id)}
+                {renderWorkspaceContent(panel.id)}
               </div>
               <button
                 type="button"
-                className={`floating-panel__resize${panel.id === 'opening' ? ' floating-panel__resize--disabled' : ''}`}
-                aria-label={`Resize ${panel.title} panel height`}
-                onPointerDown={(e) => handlePanelResizePointerDown(panel.id, e)}
+                className="floating-panel__resize-corner"
+                aria-label={`Resize ${panel.title} panel`}
+                onPointerDown={(e) => floats.handleResizePointerDown(panel.id, e)}
               />
-              {panel.id === 'opening' && (
-                <button
-                  type="button"
-                  className="floating-panel__resize-corner"
-                  aria-label={`Resize ${panel.title} panel size`}
-                  onPointerDown={(e) => handlePanelResizeCornerPointerDown(panel.id, e)}
-                />
-              )}
             </section>
           ))}
         </div>
       </main>
+    </div>
+  );
+}
+
+function RailHeader({ title }: { title: string }) {
+  return (
+    <div className="rail-section__header">
+      <span className="rail-section__title">{title}</span>
     </div>
   );
 }

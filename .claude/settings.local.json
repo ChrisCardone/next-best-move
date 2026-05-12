@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head -c 500 ~/.claude/projects/c--Users-Cardo-Desktop-next-best-move/*.jsonl)",
+      "Read(//c/Users/Cardo/.claude/projects/c--Users-Cardo-Desktop-next-best-move/**)",
+      "Bash(jq --version)",
+      "WebSearch",
+      "PowerShell(npm run typecheck)"
+    ]
+  }
+}

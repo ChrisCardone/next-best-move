@@ -185,39 +185,6 @@ export function deleteAtPath(root: RootNode, path: Path): RootNode {
   }));
 }
 
-/** Promote the variation at `path` by one slot toward index 0 within its
- *  siblings. Promoting an already-mainline node is a no-op. */
-export function promoteVariation(root: RootNode, path: Path): RootNode {
-  if (path === ROOT_PATH) return root;
-  const parentP = parent(path);
-  const id = path.slice(-2);
-  return updateAtPath(root, parentP, (n) => {
-    const idx = n.children.findIndex((c) => c.id === id);
-    if (idx <= 0) return n;
-    const reordered = n.children.slice();
-    [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
-    return { ...n, children: reordered };
-  });
-}
-
-/** Promote all the way to mainline (index 0) at every level above the node. */
-export function promoteToMainline(root: RootNode, path: Path): RootNode {
-  let working = root;
-  let cursor = path;
-  while (cursor !== ROOT_PATH) {
-    const parentP = parent(cursor);
-    const id = cursor.slice(-2);
-    working = updateAtPath(working, parentP, (n) => {
-      const idx = n.children.findIndex((c) => c.id === id);
-      if (idx <= 0) return n;
-      const reordered = [n.children[idx], ...n.children.filter((_, i) => i !== idx)];
-      return { ...n, children: reordered };
-    });
-    cursor = parentP;
-  }
-  return working;
-}
-
 /**
  * Return the most recent remaining clock for each side along `path`.
  * Only nodes that have `clockMs` set contribute. Returns `undefined` for

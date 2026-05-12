@@ -28,12 +28,13 @@ There is no ESLint config — TypeScript strict mode + `noUnusedLocals` / `noUnu
 
 The app is a single-page React 18 + Zustand client. There is no backend. All chess logic runs in-browser via `chessops`, and Stockfish runs in a Web Worker loaded from `/stockfish/stockfish-18-lite-single.js` (served from `public/`, **not** bundled by Vite).
 
-### State: four Zustand stores
+### State: five Zustand stores
 
 The stores are deliberately separate — they have different lifetimes and different persistence rules.
 
-- [`game/store.ts`](src/game/store.ts) — `useGameStore`: the move tree, current `path`, orientation, PGN headers. **Not persisted.** This is the source of truth for the board; everything else derives from it.
-- [`engine/engineStore.ts`](src/engine/engineStore.ts) — `useEngineStore`: live engine state. Two parallel sets of fields (`multipv`/`depth`/`hashMb`/`lines`/`analyzedFen` for interactive analysis, plus `analysisMultiPv`/`analysisDepth`/`analysisHashMb` for the full-game analysis pass, plus `threatLines`/`threatAnalyzedFen` for threat mode). **Persisted** via `zustand/middleware`, but `Map` fields (`lines`, `threatLines`) are not JSON-serializable — they reset to empty on hydrate; do not expect them to survive a reload.
+- [`game/store.ts`](src/game/store.ts) — `useGameStore`: the move tree, current `path`, orientation, PGN headers. **Not persisted.** This is the source of truth for the board; everything else derives from it. `currentPosition()` and `currentFen()` are memoized at the module level keyed on `(root, path)` identity, so repeated reads inside selectors are cheap and the returned references are stable.
+- [`engine/engineStore.ts`](src/engine/engineStore.ts) — `useEngineStore`: persisted engine settings — `enabled`, `showArrows`, `threatMode`, plus two nested setting buckets `interactive: { multiPv, depth, hashMb, analyseMode }` and `fullGame: { multiPv, depth, hashMb }`. **Persisted** via `zustand/middleware`. The persist config uses `version: 2` + `migrate` to convert the old flat shape (`multipv`/`analysisMultiPv`/etc.) into the nested buckets on first read.
+- [`engine/enginePvStore.ts`](src/engine/enginePvStore.ts) — `useEnginePvStore`: in-memory store for live PV lines (`lines`/`threatLines` as `Map<number, PvLine>`, plus their corresponding `analyzedFen`s). **Not persisted** — `Map`s don't survive JSON, and a stale PV after reload would only confuse things.
 - [`engine/analysisStore.ts`](src/engine/analysisStore.ts) — `useAnalysisStore`: the result of running engine over an entire mainline (per-ply `PositionEval`, plus per-side `PlayerStats` with Lichess-style accuracy/ACPL). **Not persisted.**
 - [`game/appStore.ts`](src/game/appStore.ts), [`opening/openingStore.ts`](src/opening/openingStore.ts), [`explorer/explorerStore.ts`](src/explorer/explorerStore.ts) — small persisted UI/user-prefs stores (Lichess/Chess.com usernames, opening-wiki toggle, etc.).
 
@@ -47,12 +48,14 @@ Navigation (`goNext`, `goPrev`, `goTo`) only updates the path. Position state (`
 
 Two hooks drive the engine, both mounted once in [`App.tsx`](src/App.tsx):
 
-- [`useEngine`](src/engine/useEngine.ts) — interactive analysis. Lazy-imports [`StockfishService`](src/engine/stockfish.ts) only when the user enables the engine. Re-triggers analysis with a 150 ms debounce on FEN / multipv / depth / hash changes.
-- [`useRunAnalysis`](src/engine/useRunAnalysis.ts) — full-game pass that populates `analysisStore`.
+- [`useEngine`](src/engine/useEngine.ts) — wires up two `useWorker` instances: a main worker for interactive PV display, and a threat worker (only while threat mode is enabled) that searches with the side-to-move flipped. Writes PV state to `useEnginePvStore`.
+- [`useAnalysisCleanup`](src/engine/useRunAnalysis.ts) — registers an unmount cleanup for the imperative `startRunAnalysis` / `cancelRunAnalysis` API used by the Run Analysis button. The actual full-game pass lives at module scope in the same file because it owns a singleton worker.
+
+[`useWorker`](src/engine/useWorker.ts) is the generic lifecycle hook: lazy-imports [`StockfishService`](src/engine/stockfish.ts), subscribes to UCI output, re-runs `analyze()` with a 150 ms debounce on FEN / settings change, and tears down on unmount. The main and threat engines share this hook — they differ only in `fenTransform` (identity vs. [`fenForAnalysis(_, true)`](src/engine/analysisFen.ts)) and which `useEnginePvStore` mutator the parsed lines flow into.
 
 `StockfishService.analyze()` is **safe to call repeatedly**. If a search is in flight it sends `stop` and queues the new request to fire when `bestmove` arrives. The `searching` flag exists because UCI silently drops commands sent between `stop` and the matching `bestmove` — do not bypass the queue.
 
-UCI parsing lives in [`uciParser.ts`](src/engine/uciParser.ts) (raw `info` lines → `PvLine`) and [`pvToSan.ts`](src/engine/pvToSan.ts) (UCI PV → SAN, given a starting position).
+Pure Lichess-style accuracy / classification math lives in [`accuracy.ts`](src/engine/accuracy.ts) (with [`accuracy.test.ts`](src/engine/accuracy.test.ts) covering it). UCI parsing lives in [`uciParser.ts`](src/engine/uciParser.ts) (raw `info` lines → `PvLine`) and [`pvToSan.ts`](src/engine/pvToSan.ts) (UCI PV → SAN, given a starting position).
 
 ### Vite config notes
 
@@ -62,7 +65,13 @@ UCI parsing lives in [`uciParser.ts`](src/engine/uciParser.ts) (raw `info` lines
 
 ### UI layout
 
-[`App.tsx`](src/App.tsx) implements a draggable/resizable floating-panel system on top of the board (Moves, Engine, Explorer, Opening, Analysis). Panels are managed as local React state with pointer-event drag/resize; the board column shifts/reserves space to keep at least one panel lane visible. Styles live in `src/styles/` as SCSS partials (`_engine.scss`, `_analysis.scss`, `_opening.scss`, etc.) imported by `main.scss`.
+[`App.tsx`](src/App.tsx) is a thin shell that picks between a horizontal layout (rail right of board) and a vertical layout (rail below board) via [`useLayoutMode`](src/App.tsx) (compares `window.innerWidth` vs `innerHeight` and listens for resize).
+
+Both layouts render the same three rail sections — **Moves**, **Engine**, and a **Workspace** tabbed pane (Explorer / Opening / Analysis). Section sizes are flex-grow weights managed by [`useResizableSections`](src/components/useResizableSections.ts), which exposes drag handles between adjacent sections. The horizontal layout stacks sections vertically; the vertical layout puts Moves + Engine in a row above a full-width Workspace.
+
+[`useWorkspace`](src/components/useWorkspace.ts) holds the active workspace tab and the set of popped-out tabs. Clicking the ↗ icon on a tab calls [`useFloatingPanels`](src/components/useFloatingPanels.ts)`.openPanel(...)` — that hook overlays a floating, draggable, resizable copy of the panel on top of the board area. Closing the floater calls `popIn(...)` which makes it the active workspace tab again.
+
+Styles live in `src/styles/` as SCSS partials (`_engine.scss`, `_analysis.scss`, `_opening.scss`, etc.) imported by `main.scss`, which also owns the rail/workspace/floating-panel chrome.
 
 ## Conventions worth knowing
 

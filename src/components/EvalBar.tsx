@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useEngineStore } from '../engine/engineStore';
+import { useEnginePvStore } from '../engine/enginePvStore';
 import { useGameStore } from '../game/store';
 import { whiteCp, formatScore } from '../engine/uciParser';
 
@@ -14,8 +15,8 @@ interface EvalSnapshot {
  */
 export function EvalBar() {
   const enabled = useEngineStore((s) => s.enabled);
-  const lines = useEngineStore((s) => s.lines);
-  const analyzedFen = useEngineStore((s) => s.analyzedFen);
+  const lines = useEnginePvStore((s) => s.lines);
+  const analyzedFen = useEnginePvStore((s) => s.analyzedFen);
   const fen = useGameStore((s) => s.currentFen());
   const position = useGameStore((s) => s.currentPosition());
   const orientation = useGameStore((s) => s.orientation);
@@ -63,18 +64,10 @@ export function EvalBar() {
   const whiteStyle = orientation === 'black'
     ? { height: whiteHeight, top: 0, bottom: 'auto' as const }
     : { height: whiteHeight };
-  const labelPositionClass = orientation === 'black'
+  const labelPositionClass = orientation === 'black' || pct < 50
     ? 'evalbar__label--top'
-    : pct >= 50
-      ? 'evalbar__label--bottom'
-      : 'evalbar__label--top';
-  const labelToneClass = orientation === 'black'
-    ? pct >= 50
-      ? 'evalbar__label--dark'
-      : 'evalbar__label--light'
-    : pct >= 50
-      ? 'evalbar__label--dark'
-      : 'evalbar__label--light';
+    : 'evalbar__label--bottom';
+  const labelToneClass = pct >= 50 ? 'evalbar__label--dark' : 'evalbar__label--light';
 
   return (
     <div className="evalbar" aria-label="Engine evaluation">

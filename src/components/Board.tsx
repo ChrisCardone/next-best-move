@@ -16,6 +16,7 @@ import {
 import type { NormalMove } from '../game/chess';
 import { useGameStore } from '../game/store';
 import { useEngineStore } from '../engine/engineStore';
+import { useEnginePvStore } from '../engine/enginePvStore';
 import { fenForAnalysis } from '../engine/analysisFen';
 import { useExplorerStore } from '../explorer/explorerStore';
 import { isOnMainline } from '../game/tree';
@@ -103,10 +104,10 @@ export function Board() {
   const engineEnabled = useEngineStore((s) => s.enabled);
   const showArrows = useEngineStore((s) => s.showArrows);
   const threatMode = useEngineStore((s) => s.threatMode);
-  const engineLines = useEngineStore((s) => s.lines);
-  const analyzedFen = useEngineStore((s) => s.analyzedFen);
-  const threatLines = useEngineStore((s) => s.threatLines);
-  const threatAnalyzedFen = useEngineStore((s) => s.threatAnalyzedFen);
+  const engineLines = useEnginePvStore((s) => s.lines);
+  const analyzedFen = useEnginePvStore((s) => s.analyzedFen);
+  const threatLines = useEnginePvStore((s) => s.threatLines);
+  const threatAnalyzedFen = useEnginePvStore((s) => s.threatAnalyzedFen);
   const currentFen = useGameStore((s) => s.currentFen());
   const showBestMoveArrow = useExplorerStore((s) => s.showBestMoveArrow);
   const bestMoveFen = useExplorerStore((s) => s.bestMoveFen);

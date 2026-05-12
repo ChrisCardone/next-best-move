@@ -13,6 +13,10 @@
 @import '@lichess-org/chessground/assets/chessground.brown.css';
 @import '@lichess-org/chessground/assets/chessground.cburnett.css';
 
+$rail-width: 440px;
+$rail-handle: 6px;
+$workspace-tab-height: 32px;
+
 *,
 *::before,
 *::after {
@@ -78,61 +82,94 @@ button,
     flex: 1;
     position: relative;
     isolation: isolate;
-    display: block;
-    padding: $gap;
     min-height: 0;
+    padding: $gap;
+    gap: $gap;
+    overflow: hidden;
+  }
+
+  &--horizontal &__main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) $rail-width;
+    grid-template-rows: 1fr;
+  }
+
+  &--vertical &__main {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(280px, 0.6fr);
   }
 
   &__board {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    width: 100%;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
     container-type: size;
   }
+
+  // The board-column has height: 100% by default for the floating-panel era.
+  // In the new layout we let it auto-size and the parent centers it.
+  &__board .board-column {
+    height: auto;
+    justify-content: center;
+  }
 }
 
-.floating-panels {
-  position: absolute;
-  inset: $gap;
-  z-index: 180;
-  pointer-events: none;
+// ── Rail (the right-side / below-board panel container) ────────────────────
+
+.app__rail {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  background: transparent;
+
+  &--vertical {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  &--below {
+    flex-direction: column;
+    gap: $gap;
+  }
 }
 
-.floating-panel {
-  position: absolute;
-  pointer-events: auto;
+.rail-row {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+.rail-section {
   display: flex;
   flex-direction: column;
-  min-height: 160px;
-  border-radius: 8px;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  background: color-mix(in srgb, $bg-panel 90%, #000 10%);
   border: 1px solid $border-strong;
-  background: color-mix(in srgb, $bg-panel 88%, #000 12%);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+  border-radius: 8px;
   overflow: hidden;
 
   &__header {
-    height: 30px;
-    padding: 0 0.6rem;
+    height: 28px;
+    padding: 0 0.7rem;
     display: flex;
     align-items: center;
     border-bottom: 1px solid $border;
     background: color-mix(in srgb, $bg-panel-alt 70%, #000 30%);
-    cursor: grab;
     user-select: none;
-  }
-
-  &__header:active {
-    cursor: grabbing;
+    flex-shrink: 0;
   }
 
   &__title {
     color: $text-muted;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -147,45 +184,238 @@ button,
     > * {
       flex: 1;
       min-height: 0;
+      min-width: 0;
+    }
+
+    &--flush {
+      // For panels that supply their own header (like WorkspaceTabs).
     }
   }
+}
 
-  &__resize {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 12px;
-    border: 0;
-    border-top: 1px solid $border;
-    background: linear-gradient(
-      to bottom,
-      color-mix(in srgb, $bg-panel-alt 55%, transparent),
-      color-mix(in srgb, $bg-panel 70%, transparent)
-    );
+.rail-section--engine {
+  // Engine panel can show a hover popup that pops out of bounds.
+  overflow: visible;
+
+  .rail-section__body {
+    overflow: visible;
+  }
+}
+
+.rail-section--workspace-below {
+  flex: 1 1 0;
+}
+
+// ── Rail resize handles ────────────────────────────────────────────────────
+
+.rail-handle {
+  flex-shrink: 0;
+  background: transparent;
+  position: relative;
+
+  &--horizontal {
+    height: $rail-handle;
     cursor: ns-resize;
-    padding: 0;
 
     &::before {
       content: '';
       position: absolute;
       left: 50%;
-      top: 3px;
+      top: 50%;
+      transform: translate(-50%, -50%);
       width: 40px;
-      height: 4px;
-      transform: translateX(-50%);
+      height: 2px;
       border-radius: 999px;
-      background: color-mix(in srgb, $text-muted 55%, transparent);
+      background: color-mix(in srgb, $text-muted 30%, transparent);
+      transition: background 120ms;
     }
 
     &:hover::before {
       background: color-mix(in srgb, $accent-blue 60%, $text-muted 40%);
+      height: 3px;
     }
   }
 
-  &__resize--disabled {
-    pointer-events: none;
-    opacity: 0;
+  &--vertical {
+    width: $rail-handle;
+    cursor: ew-resize;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 40px;
+      border-radius: 999px;
+      background: color-mix(in srgb, $text-muted 30%, transparent);
+      transition: background 120ms;
+    }
+
+    &:hover::before {
+      background: color-mix(in srgb, $accent-blue 60%, $text-muted 40%);
+      width: 3px;
+    }
+  }
+}
+
+// ── Workspace tabs ─────────────────────────────────────────────────────────
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+
+  &__tabs {
+    display: flex;
+    align-items: stretch;
+    height: $workspace-tab-height;
+    border-bottom: 1px solid $border;
+    background: color-mix(in srgb, $bg-panel-alt 70%, #000 30%);
+    flex-shrink: 0;
+  }
+
+  &__tab {
+    background: transparent;
+    color: $text-muted;
+    border: 0;
+    padding: 0 0.9rem;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-right: 1px solid $border;
+    transition: background 120ms, color 120ms;
+
+    &:hover {
+      color: $text-primary;
+      background: color-mix(in srgb, $bg-panel 50%, transparent);
+    }
+
+    &.is-active {
+      color: $text-strong;
+      background: color-mix(in srgb, $bg-panel 100%, transparent);
+      box-shadow: inset 0 -2px 0 $accent-blue;
+    }
+  }
+
+  &__pop {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: $text-muted;
+    padding: 0 0.7rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: color 120ms, background 120ms;
+
+    &:hover {
+      color: $accent-blue;
+      background: color-mix(in srgb, $bg-panel 60%, transparent);
+    }
+  }
+
+  &__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+
+    > * {
+      flex: 1;
+      min-height: 0;
+    }
+  }
+
+  &__empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-muted;
+    font-size: 0.85rem;
+    padding: 1rem;
+    text-align: center;
+  }
+}
+
+// ── Floating pop-outs (for tabs detached from the workspace) ──────────────
+
+.floating-panels {
+  position: absolute;
+  inset: $gap;
+  z-index: 180;
+  pointer-events: none;
+}
+
+.floating-panel {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 170px;
+  min-width: 260px;
+  border-radius: 8px;
+  border: 1px solid $border-strong;
+  background: color-mix(in srgb, $bg-panel 88%, #000 12%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+
+  &__header {
+    height: 30px;
+    padding: 0 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid $border;
+    background: color-mix(in srgb, $bg-panel-alt 70%, #000 30%);
+    cursor: grab;
+    user-select: none;
+  }
+
+  &__header:active {
+    cursor: grabbing;
+  }
+
+  &__title {
+    color: $text-muted;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &__close {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    color: $text-muted;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding: 0 0.35rem;
+    cursor: pointer;
+    border-radius: 3px;
+
+    &:hover {
+      color: $text-strong;
+      background: color-mix(in srgb, $bg-panel 50%, transparent);
+    }
+  }
+
+  &__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+
+    > * {
+      flex: 1;
+      min-height: 0;
+    }
   }
 
   &__resize-corner {
@@ -222,15 +452,8 @@ button,
 
 .floating-panel--engine {
   overflow: visible;
-}
 
-.floating-panel--engine .floating-panel__body {
-  overflow: visible;
-}
-
-@media (max-width: 900px) {
-  .floating-panels {
-    inset: 0.35rem;
+  .floating-panel__body {
+    overflow: visible;
   }
 }
-

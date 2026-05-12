@@ -9,8 +9,6 @@ import {
   nodeAtPath,
   nodesOnPath,
   prevPath,
-  promoteToMainline,
-  promoteVariation,
   type RootNode,
 } from './tree';
 
@@ -104,17 +102,11 @@ describe('tree', () => {
     expect(nodeAtPath(created.root, created.path)).toMatchObject({ uci: 'd7d5' });
   });
 
-  it('deletes and promotes variations', () => {
+  it('deletes variations', () => {
     const root = sampleTree();
     const deleted = deleteAtPath(root, 'aacc');
-    const promoted = promoteVariation(root, 'aacc');
-    const mainline = promoteToMainline(root, 'dd');
 
     expect(nodeAtPath(deleted, 'aacc')).toBeUndefined();
-    expect(nextPath(promoted, 'aa')).toBe('aacc');
-    expect(nodeAtPath(promoted, 'aacc')).toMatchObject({ uci: 'c7c5' });
-    expect(nodeAtPath(mainline, 'dd')).toMatchObject({ uci: 'd2d4' });
-    expect(endOfVariation(mainline, '')).toBe('dd');
   });
 
   it('derives clocks from current and future mainline nodes', () => {

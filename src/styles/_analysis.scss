@@ -10,9 +10,10 @@
 
   // ── Idle state ──────────────────────────────────────────────────────
   &--idle {
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+    align-items: stretch;
+    justify-content: flex-start;
+    text-align: left;
+    gap: 0.75rem;
   }
 
   &__hint {
@@ -20,10 +21,137 @@
     font-size: 0.88em;
     line-height: 1.5;
     margin: 0;
+    text-align: center;
 
     strong {
       color: $text-primary;
     }
+  }
+
+  &__idle-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 1rem 0.85rem 1.1rem;
+    background: $bg-panel-alt;
+    border: 1px solid $border;
+    border-radius: $radius;
+    text-align: center;
+  }
+
+  &__idle-blurb {
+    color: $text-muted;
+    font-size: 0.85em;
+    line-height: 1.45;
+    margin: 0;
+    max-width: 28rem;
+  }
+
+  &__run-btn {
+    background: $accent-blue;
+    color: #fff;
+    border: none;
+    border-radius: $radius;
+    padding: 0.55rem 1.6rem;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: filter 120ms ease;
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.12);
+    }
+
+    &:active:not(:disabled) {
+      filter: brightness(0.95);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+  }
+
+  &__settings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.7rem 0.85rem;
+    background: $bg-panel-alt;
+    border: 1px solid $border;
+    border-radius: $radius;
+
+    &-title {
+      font-size: 0.7em;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: $text-muted;
+      margin: 0 0 0.2rem;
+    }
+  }
+
+  &__settings-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 1.6rem;
+    font-size: 0.85em;
+
+    label {
+      color: $text-muted;
+      flex: 0 0 auto;
+      min-width: 5rem;
+    }
+
+    input[type='range'] {
+      flex: 1;
+      min-width: 0;
+      accent-color: $accent-blue;
+    }
+
+    input[type='checkbox'] {
+      accent-color: $accent-blue;
+      width: 15px;
+      height: 15px;
+      margin-left: auto;
+      cursor: pointer;
+    }
+
+    select {
+      flex: 1;
+      min-width: 0;
+      background: $bg-input;
+      border: 1px solid $border;
+      color: $text-primary;
+      border-radius: $radius;
+      padding: 0.25rem 1.6rem 0.25rem 0.5rem;
+      font: inherit;
+      font-size: 0.95em;
+      line-height: 1.2;
+      cursor: pointer;
+      appearance: none;
+      // Custom chevron — encoded SVG, color matches $text-muted (#8a8a8a)
+      background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 2l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.55rem center;
+      background-size: 0.65rem;
+
+      &:hover,
+      &:focus {
+        border-color: $border-strong;
+        outline: none;
+      }
+    }
+  }
+
+  &__settings-val {
+    font-variant-numeric: tabular-nums;
+    color: $text-strong;
+    min-width: 2.2rem;
+    text-align: right;
+    flex: 0 0 auto;
   }
 
   // ── Running state ────────────────────────────────────────────────────
@@ -89,10 +217,12 @@
     background: $bg-panel-alt;
     border-radius: $radius;
     border: 1px solid $border;
-    padding: 0.5rem 0.6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
+    padding: 0.3rem 0.5rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 0.5rem;
+    row-gap: 0.1rem;
+    align-items: baseline;
 
     &--white {
       border-top: 2px solid #d8d0b8;
@@ -104,40 +234,45 @@
   }
 
   &__player-name {
-    font-size: 0.8em;
+    font-size: 0.78em;
     color: $text-muted;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   &__accuracy {
-    font-size: 1.55em;
+    font-size: 1.25em;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: $text-strong;
-    line-height: 1.1;
+    line-height: 1;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
   }
 
   &__accuracy-label {
-    font-size: 0.72em;
-    color: $text-muted;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    display: none;
   }
 
   &__acpl {
-    font-size: 0.78em;
+    font-size: 0.74em;
     color: $text-muted;
-    margin-top: 0.1rem;
     font-variant-numeric: tabular-nums;
+    grid-column: 1;
+    grid-row: 2;
   }
 
   &__counts {
     display: flex;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    margin-top: 0.25rem;
+    gap: 0.25rem;
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    flex-wrap: nowrap;
   }
 
   &__count {
@@ -170,17 +305,23 @@
 
   // ── Advantage graph ───────────────────────────────────────────────────
   &__graph {
+    position: relative;
     display: block;
     width: 100%;
-    height: 80px;
+    flex: 1 1 auto;
+    min-height: 80px;
     border-radius: $radius;
     background: $bg-panel-alt;
     border: 1px solid $border;
-    cursor: pointer;
-    flex-shrink: 0;
+    overflow: hidden;
 
     &:hover {
       border-color: $border-strong;
     }
+  }
+
+  &__graph-svg {
+    display: block;
+    cursor: pointer;
   }
 }

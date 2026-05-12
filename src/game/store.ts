@@ -10,8 +10,6 @@ import {
   nodeAtPath,
   prevPath,
   deleteAtPath,
-  promoteVariation,
-  promoteToMainline,
 } from './tree';
 import type { RootNode } from './tree';
 import { ROOT_PATH } from './path';
@@ -20,6 +18,24 @@ import { positionAtPath } from './derive';
 import { defaultRoot, pgnToTree } from './pgn';
 
 export type Orientation = 'white' | 'black';
+
+// Memoize the derived position/fen for the current (root, path) tuple.
+// Components subscribe via `useGameStore((s) => s.currentFen())`, and Zustand
+// re-runs the selector on every store change — so without this cache the
+// `Chess` object would be rebuilt on every render and the returned fen
+// string would have a fresh identity each call, defeating shallow-equality
+// bail-outs further down the React tree.
+let _derivedCache: { root: RootNode; path: Path; pos: Chess; fen: string } | null = null;
+
+function derive(root: RootNode, path: Path): { pos: Chess; fen: string } {
+  if (_derivedCache && _derivedCache.root === root && _derivedCache.path === path) {
+    return _derivedCache;
+  }
+  const pos = positionAtPath(root, path);
+  const fen = makeFen(pos.toSetup());
+  _derivedCache = { root, path, pos, fen };
+  return _derivedCache;
+}
 
 interface GameState {
   root: RootNode;
@@ -49,7 +65,6 @@ interface GameState {
   loadPgn(pgn: string): boolean;
   reset(): void;
   deleteVariation(path: Path): void;
-  promote(path: Path, toMainline?: boolean): void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -64,10 +79,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   currentPosition() {
     const { root, path } = get();
-    return positionAtPath(root, path);
+    return derive(root, path).pos;
   },
   currentFen() {
-    return makeFen(get().currentPosition().toSetup());
+    const { root, path } = get();
+    return derive(root, path).fen;
   },
   lastUci() {
     const { root, path } = get();
@@ -143,12 +159,5 @@ export const useGameStore = create<GameState>((set, get) => ({
       const newPath = s.path.startsWith(path) ? path.slice(0, -2) : s.path;
       return { root: newRoot, path: newPath };
     });
-  },
-  promote(path, toMainline = false) {
-    set((s) => ({
-      root: toMainline
-        ? promoteToMainline(s.root, path)
-        : promoteVariation(s.root, path),
-    }));
   },
 }));

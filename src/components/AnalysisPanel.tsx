@@ -1,30 +1,29 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAnalysisStore } from '../engine/analysisStore';
-import { cancelRunAnalysis } from '../engine/useRunAnalysis';
+import { cancelRunAnalysis, startRunAnalysis } from '../engine/useRunAnalysis';
 import { useGameStore } from '../game/store';
 import { mainlinePath, nodesOnPath } from '../game/tree';
 import type { PositionEval, PlayerStats } from '../engine/analysisStore';
 import type { Path } from '../game/path';
+import { AnalysisSettingsPanel } from './AnalysisSettingsPanel';
 
 // ---------------------------------------------------------------------------
 // Advantage graph
+//
+// We draw the SVG at the container's actual measured size so 1 SVG unit = 1
+// CSS pixel — no preserveAspectRatio stretching, no distorted stroke widths.
 // ---------------------------------------------------------------------------
 
-const SVG_W = 600;
-const SVG_H = 80;
-const PAD_Y = 6;
-const MID_Y = SVG_H / 2;
+const PAD_Y_RATIO = 0.075; // 7.5% of height padding top + bottom
 
-function yFor(winPct: number): number {
-  // winPct=100 (white wins) → top (small y)
-  // winPct=50 (equal)       → middle
-  // winPct=0  (black wins)  → bottom (large y)
-  return PAD_Y + ((100 - winPct) / 100) * (SVG_H - 2 * PAD_Y);
+function yFor(winPct: number, h: number): number {
+  const padY = h * PAD_Y_RATIO;
+  return padY + ((100 - winPct) / 100) * (h - 2 * padY);
 }
 
-function xFor(i: number, n: number): number {
-  if (n <= 1) return SVG_W / 2;
-  return (i / (n - 1)) * SVG_W;
+function xFor(i: number, n: number, w: number): number {
+  if (n <= 1) return w / 2;
+  return (i / (n - 1)) * w;
 }
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
@@ -40,24 +39,47 @@ interface AdvantageGraphProps {
 }
 
 function AdvantageGraph({ positions, currentPly, onPlyClick }: AdvantageGraphProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 600, h: 80 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setSize({ w: rect.width, h: rect.height });
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const n = positions.length;
-  if (n < 2) return null;
+  if (n < 2) return <div ref={containerRef} className="analysis__graph analysis__graph--empty" />;
+
+  const { w, h } = size;
+  const midY = h / 2;
+  // Stroke widths scale lightly with height so they look right at any panel size.
+  const lineW = Math.max(1, h * 0.012);
+  const centreW = Math.max(0.5, h * 0.008);
+  const cursorW = Math.max(1.2, h * 0.016);
+  const dotR = Math.max(2, h * 0.028);
 
   const linePoints = positions
-    .map((p, i) => `${xFor(i, n)},${yFor(p.whiteWinPct)}`)
+    .map((p, i) => `${xFor(i, n, w)},${yFor(p.whiteWinPct, h)}`)
     .join(' ');
 
-  // Closed polygon: leftMid → all line points → rightMid
-  // Clipped to upper half = white advantage area
-  // Clipped to lower half = black advantage area
   const polygonPoints = [
-    `0,${MID_Y}`,
-    ...positions.map((p, i) => `${xFor(i, n)},${yFor(p.whiteWinPct)}`),
-    `${SVG_W},${MID_Y}`,
+    `0,${midY}`,
+    ...positions.map((p, i) => `${xFor(i, n, w)},${yFor(p.whiteWinPct, h)}`),
+    `${w},${midY}`,
   ].join(' ');
 
   const currentIdx = positions.findIndex((p) => p.ply === currentPly);
-  const currentX = currentIdx >= 0 ? xFor(currentIdx, n) : null;
+  const currentX = currentIdx >= 0 ? xFor(currentIdx, n, w) : null;
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -67,75 +89,78 @@ function AdvantageGraph({ positions, currentPly, onPlyClick }: AdvantageGraphPro
   }
 
   return (
-    <svg
-      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-      preserveAspectRatio="none"
-      className="analysis__graph"
-      onClick={handleClick}
-    >
-      <defs>
-        <clipPath id="analysis-clip-white">
-          <rect x={0} y={0} width={SVG_W} height={MID_Y} />
-        </clipPath>
-        <clipPath id="analysis-clip-black">
-          <rect x={0} y={MID_Y} width={SVG_W} height={SVG_H - MID_Y} />
-        </clipPath>
-      </defs>
+    <div ref={containerRef} className="analysis__graph">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        width={w}
+        height={h}
+        className="analysis__graph-svg"
+        onClick={handleClick}
+      >
+        <defs>
+          <clipPath id="analysis-clip-white">
+            <rect x={0} y={0} width={w} height={midY} />
+          </clipPath>
+          <clipPath id="analysis-clip-black">
+            <rect x={0} y={midY} width={w} height={h - midY} />
+          </clipPath>
+        </defs>
 
-      {/* White advantage fill */}
-      <polygon
-        points={polygonPoints}
-        fill="rgba(230, 220, 190, 0.22)"
-        clipPath="url(#analysis-clip-white)"
-      />
-      {/* Black advantage fill */}
-      <polygon
-        points={polygonPoints}
-        fill="rgba(10, 10, 10, 0.45)"
-        clipPath="url(#analysis-clip-black)"
-      />
-
-      {/* Centre line */}
-      <line
-        x1={0} y1={MID_Y} x2={SVG_W} y2={MID_Y}
-        stroke="rgba(255,255,255,0.12)"
-        strokeWidth={0.6}
-      />
-
-      {/* Advantage line */}
-      <polyline
-        points={linePoints}
-        fill="none"
-        stroke="rgba(255,255,255,0.65)"
-        strokeWidth={0.9}
-        strokeLinejoin="round"
-      />
-
-      {/* Current position marker */}
-      {currentX !== null && (
-        <line
-          x1={currentX} y1={0} x2={currentX} y2={SVG_H}
-          stroke="rgba(255, 200, 60, 0.7)"
-          strokeWidth={1.2}
+        {/* White advantage fill */}
+        <polygon
+          points={polygonPoints}
+          fill="rgba(230, 220, 190, 0.22)"
+          clipPath="url(#analysis-clip-white)"
         />
-      )}
+        {/* Black advantage fill */}
+        <polygon
+          points={polygonPoints}
+          fill="rgba(10, 10, 10, 0.45)"
+          clipPath="url(#analysis-clip-black)"
+        />
 
-      {/* Classification markers */}
-      {positions.slice(1).map((pos, i) => {
-        const realIdx = i + 1;
-        const color = pos.classification ? CLASSIFICATION_COLORS[pos.classification] : null;
-        if (!color) return null;
-        return (
-          <circle
-            key={realIdx}
-            cx={xFor(realIdx, n)}
-            cy={yFor(pos.whiteWinPct)}
-            r={2.2}
-            fill={color}
+        {/* Centre line */}
+        <line
+          x1={0} y1={midY} x2={w} y2={midY}
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth={centreW}
+        />
+
+        {/* Advantage line */}
+        <polyline
+          points={linePoints}
+          fill="none"
+          stroke="rgba(255,255,255,0.65)"
+          strokeWidth={lineW}
+          strokeLinejoin="round"
+        />
+
+        {/* Current position marker */}
+        {currentX !== null && (
+          <line
+            x1={currentX} y1={0} x2={currentX} y2={h}
+            stroke="rgba(255, 200, 60, 0.7)"
+            strokeWidth={cursorW}
           />
-        );
-      })}
-    </svg>
+        )}
+
+        {/* Classification markers */}
+        {positions.slice(1).map((pos, i) => {
+          const realIdx = i + 1;
+          const color = pos.classification ? CLASSIFICATION_COLORS[pos.classification] : null;
+          if (!color) return null;
+          return (
+            <circle
+              key={realIdx}
+              cx={xFor(realIdx, n, w)}
+              cy={yFor(pos.whiteWinPct, h)}
+              r={dotR}
+              fill={color}
+            />
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -199,6 +224,7 @@ export function AnalysisPanel() {
   }, [root, path]);
 
   const mainPath = useMemo(() => mainlinePath(root), [root]);
+  const mainlineLen = mainPath.length / 2;
 
   function handlePlyClick(ply: number) {
     // Slice the main path to the target ply (each path segment = 2 chars).
@@ -208,11 +234,26 @@ export function AnalysisPanel() {
   const progressPct = total > 0 ? Math.round((progress / total) * 100) : 0;
 
   if (status === 'idle') {
+    const canRun = mainlineLen > 0;
     return (
       <div className="analysis analysis--idle">
-        <p className="analysis__hint">
-          Click <strong>Run Analysis</strong> in the Engine panel to analyze the main line.
-        </p>
+        <div className="analysis__idle-card">
+          <p className="analysis__idle-blurb">
+            Analyse the full game with Stockfish to get per-move accuracy, ACPL, and an advantage graph.
+          </p>
+          <button
+            type="button"
+            className="analysis__run-btn"
+            onClick={startRunAnalysis}
+            disabled={!canRun}
+          >
+            Run Analysis
+          </button>
+          {!canRun && (
+            <p className="analysis__hint">Load a game or play some moves first.</p>
+          )}
+        </div>
+        <AnalysisSettingsPanel />
       </div>
     );
   }

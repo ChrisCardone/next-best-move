@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import type { MoveClassification } from './accuracy';
 
-export type MoveClassification = 'blunder' | 'mistake' | 'inaccuracy' | 'good';
+export type { MoveClassification };
 
 /** Evaluation result for a single position on the mainline. Index 0 is the
  *  starting position; there is no move leading to it so `accuracy` and

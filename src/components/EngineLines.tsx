@@ -1,13 +1,11 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { useEngineStore } from '../engine/engineStore';
-import { useAnalysisStore } from '../engine/analysisStore';
-import { startRunAnalysis, cancelRunAnalysis } from '../engine/useRunAnalysis';
+import { useEnginePvStore } from '../engine/enginePvStore';
 import { useGameStore } from '../game/store';
 import { formatScore } from '../engine/uciParser';
 import { pvToSan, type PvBoard } from '../engine/pvToSan';
 import { PvMiniBoard } from './PvMiniBoard';
-
-const HASH_OPTIONS = [16, 32, 64, 128, 256] as const;
+import { EngineSettingsPanel } from './EngineSettingsPanel';
 
 interface HoverState {
   lineKey: number;
@@ -28,30 +26,15 @@ export function EngineLines() {
   const replayTimeoutRef = useRef<number | null>(null);
 
   const enabled = useEngineStore((s) => s.enabled);
-  const multipv = useEngineStore((s) => s.multipv);
-  const depth = useEngineStore((s) => s.depth);
-  const analysisStatus = useAnalysisStore((s) => s.status);
-  const hashMb = useEngineStore((s) => s.hashMb);
-  const analyseMode = useEngineStore((s) => s.analyseMode);
-  const analysisMultiPv = useEngineStore((s) => s.analysisMultiPv);
-  const analysisDepth = useEngineStore((s) => s.analysisDepth);
-  const analysisHashMb = useEngineStore((s) => s.analysisHashMb);
   const threatMode = useEngineStore((s) => s.threatMode);
-  const lines = useEngineStore((s) => s.lines);
-  const threatLines = useEngineStore((s) => s.threatLines);
-  const analyzedFen = useEngineStore((s) => s.analyzedFen);
-  const threatAnalyzedFen = useEngineStore((s) => s.threatAnalyzedFen);
+  const lines = useEnginePvStore((s) => s.lines);
+  const threatLines = useEnginePvStore((s) => s.threatLines);
+  const analyzedFen = useEnginePvStore((s) => s.analyzedFen);
+  const threatAnalyzedFen = useEnginePvStore((s) => s.threatAnalyzedFen);
   const toggle = useEngineStore((s) => s.toggle);
   const showArrows = useEngineStore((s) => s.showArrows);
   const toggleArrows = useEngineStore((s) => s.toggleArrows);
   const toggleThreatMode = useEngineStore((s) => s.toggleThreatMode);
-  const setMultiPv = useEngineStore((s) => s.setMultiPv);
-  const setDepth = useEngineStore((s) => s.setDepth);
-  const setHashMb = useEngineStore((s) => s.setHashMb);
-  const setAnalyseMode = useEngineStore((s) => s.setAnalyseMode);
-  const setAnalysisMultiPv = useEngineStore((s) => s.setAnalysisMultiPv);
-  const setAnalysisDepth = useEngineStore((s) => s.setAnalysisDepth);
-  const setAnalysisHashMb = useEngineStore((s) => s.setAnalysisHashMb);
 
   const fen = useGameStore((s) => s.currentFen());
   const playUci = useGameStore((s) => s.playUci);
@@ -70,45 +53,27 @@ export function EngineLines() {
   const settingsRef = useRef<HTMLDivElement>(null);
   const linesRef = useRef<HTMLUListElement>(null);
 
-  // Mirror hoverState into a ref so the wheel handler never sees a stale closure.
-  const hoverStateRef = useRef(hoverState);
-  useEffect(() => { hoverStateRef.current = hoverState; }, [hoverState]);
-
-  function setPreviewState(next: HoverState | null) {
-    hoverStateRef.current = next;
-    setHoverState(next);
-  }
-
-  function updatePreviewState(updater: (prev: HoverState | null) => HoverState | null) {
-    setHoverState((prev) => {
-      const next = updater(prev);
-      hoverStateRef.current = next;
-      return next;
-    });
-  }
-
   // Auto-increment to the next move after hover starts, so the first move
   // animates automatically without needing to scroll.
   useEffect(() => {
     if (!hoverState || hoverState.index !== 0 || hoverState.boards.length < 2) return;
     const timeout = setTimeout(() => {
-      updatePreviewState((prev) => prev && prev.index === 0 ? { ...prev, index: 1 } : prev);
+      setHoverState((prev) => prev && prev.index === 0 ? { ...prev, index: 1 } : prev);
     }, 270);
     return () => clearTimeout(timeout);
   }, [hoverState?.lineKey]);
 
   // Non-passive wheel listener: when a line is being previewed, scroll the
-  // move index instead of scrolling the lines list.
+  // move index instead of scrolling the lines list. Re-attached when
+  // hoverState becomes (non-)null so the handler sees the current state.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !hoverState) return;
     const el = linesRef.current;
     if (!el) return;
     function onWheel(e: WheelEvent) {
-      const current = hoverStateRef.current;
-      if (!current) return;
       e.preventDefault();
       const dir = e.deltaY > 0 ? 1 : -1;
-      updatePreviewState((prev) => {
+      setHoverState((prev) => {
         if (!prev) return prev;
         const nextIndex = Math.max(0, Math.min(prev.boards.length - 1, prev.index + dir));
         return nextIndex === prev.index ? prev : { ...prev, index: nextIndex };
@@ -116,7 +81,7 @@ export function EngineLines() {
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [enabled]);
+  }, [enabled, hoverState !== null]);
 
   // Close settings when clicking outside.
   useEffect(() => {
@@ -220,17 +185,6 @@ export function EngineLines() {
           </button>
         )}
         {enabled && (
-          <button
-            type="button"
-            className={`engine__run-analysis${analysisStatus === 'running' ? ' is-running' : ''}`}
-            onClick={analysisStatus === 'running' ? cancelRunAnalysis : startRunAnalysis}
-            title={analysisStatus === 'running' ? 'Cancel analysis' : 'Analyze full game'}
-            aria-label={analysisStatus === 'running' ? 'Cancel analysis' : 'Run Analysis'}
-          >
-            {analysisStatus === 'running' ? '■' : '⚡'}
-          </button>
-        )}
-        {enabled && (
           <div className="engine__header-actions" ref={settingsRef}>
             <button
               type="button"
@@ -241,100 +195,7 @@ export function EngineLines() {
             >
               ⚙
             </button>
-            {showSettings && (
-              <div className="engine__settings">
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-multipv">Lines</label>
-                  <input
-                    id="eng-multipv"
-                    type="range"
-                    min={1}
-                    max={5}
-                    step={1}
-                    value={multipv}
-                    onChange={(e) => setMultiPv(parseInt(e.target.value, 10))}
-                  />
-                  <span className="engine__settings-val">{multipv}</span>
-                </div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-depth">Depth</label>
-                  <input
-                    id="eng-depth"
-                    type="range"
-                    min={1}
-                    max={99}
-                    step={1}
-                    value={depth}
-                    onChange={(e) => setDepth(parseInt(e.target.value, 10))}
-                  />
-                  <span className="engine__settings-val">{depth}</span>
-                </div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-hash">Hash</label>
-                  <select
-                    id="eng-hash"
-                    value={hashMb}
-                    onChange={(e) => setHashMb(parseInt(e.target.value, 10))}
-                  >
-                    {HASH_OPTIONS.map((mb) => (
-                      <option key={mb} value={mb}>
-                        {mb} MB
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-analysemode">Analysis mode</label>
-                  <input
-                    id="eng-analysemode"
-                    type="checkbox"
-                    checked={analyseMode}
-                    onChange={(e) => setAnalyseMode(e.target.checked)}
-                  />
-                </div>
-                <div className="engine__settings-section-label">Run Analysis</div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-analysis-multipv">Lines</label>
-                  <input
-                    id="eng-analysis-multipv"
-                    type="range"
-                    min={1}
-                    max={5}
-                    step={1}
-                    value={analysisMultiPv}
-                    onChange={(e) => setAnalysisMultiPv(parseInt(e.target.value, 10))}
-                  />
-                  <span className="engine__settings-val">{analysisMultiPv}</span>
-                </div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-analysis-depth">Depth</label>
-                  <input
-                    id="eng-analysis-depth"
-                    type="range"
-                    min={1}
-                    max={99}
-                    step={1}
-                    value={analysisDepth}
-                    onChange={(e) => setAnalysisDepth(parseInt(e.target.value, 10))}
-                  />
-                  <span className="engine__settings-val">{analysisDepth}</span>
-                </div>
-                <div className="engine__settings-row">
-                  <label htmlFor="eng-analysis-hash">Hash</label>
-                  <select
-                    id="eng-analysis-hash"
-                    value={analysisHashMb}
-                    onChange={(e) => setAnalysisHashMb(parseInt(e.target.value, 10))}
-                  >
-                    {HASH_OPTIONS.map((mb) => (
-                      <option key={`analysis-${mb}`} value={mb}>
-                        {mb} MB
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+            {showSettings && <EngineSettingsPanel />}
           </div>
         )}
       </header>
@@ -363,10 +224,10 @@ export function EngineLines() {
                   const left = Math.max(pad, Math.min(window.innerWidth - popupSize - pad, leftUnclamped));
                   const top = Math.max(pad, Math.min(window.innerHeight - popupSize - pad, topUnclamped));
                   setPopupPos({ top, left });
-                  setPreviewState({ lineKey: pv.multipv, boards, index: 0 });
+                  setHoverState({ lineKey: pv.multipv, boards, index: 0 });
                 }}
                 onMouseLeave={() => {
-                  updatePreviewState((prev) => (prev?.lineKey === pv.multipv ? null : prev));
+                  setHoverState((prev) => (prev?.lineKey === pv.multipv ? null : prev));
                 }}
               >
                 <span className="engine__score">{formatScore(pv, whiteToMove)}</span>
@@ -378,6 +239,10 @@ export function EngineLines() {
                     const moveNum = Math.floor(ply / 2) + 1;
                     const prefix =
                       isWhite ? `${moveNum}.` : i === 0 ? `${moveNum}…` : '';
+                    // Each SAN button maps to boards[i + 1] — boards[0] is the
+                    // starting position, boards[k] is the position after the
+                    // k-th move in the PV.
+                    const previewIndex = i + 1;
                     return (
                       <span key={i} className="engine__movepair">
                         {prefix && (
@@ -387,7 +252,23 @@ export function EngineLines() {
                           type="button"
                           className="engine__san"
                           onClick={() => replayLineToIndex(pv.pv, i)}
-                          title="Go to this position"
+                          onMouseEnter={(e) => {
+                            // Set the WHOLE hover state from this button alone —
+                            // engine info updates can cause React to drop the
+                            // line-level hover state, so per-SAN hover stands
+                            // on its own. Position the popup below the line.
+                            const li = (e.currentTarget as HTMLElement).closest('.engine__line');
+                            if (!li) return;
+                            const lineRect = li.getBoundingClientRect();
+                            const popupSize = 300;
+                            const pad = 8;
+                            const left = Math.max(pad, Math.min(window.innerWidth - popupSize - pad, lineRect.left));
+                            const top = Math.max(pad, Math.min(window.innerHeight - popupSize - pad, lineRect.bottom + 6));
+                            setPopupPos({ top, left });
+                            const clampedIndex = Math.max(0, Math.min(previewIndex, boards.length - 1));
+                            setHoverState({ lineKey: pv.multipv, boards, index: clampedIndex });
+                          }}
+                          title="Hover to preview position, click to play"
                         >
                           {san}
                         </button>

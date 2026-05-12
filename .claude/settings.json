@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run preview)",
+      "Bash(npm test)",
+      "Bash(npm test -- *)",
+      "Bash(npx vitest)",
+      "Bash(npx vitest run *)",
+      "Bash(npx tsc -b --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "mcp__claude-in-chrome__tabs_context_mcp"
+    ]
+  }
+}

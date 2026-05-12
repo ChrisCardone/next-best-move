@@ -221,53 +221,19 @@ export function ExplorerPanel() {
             {data.moves.map((m) => (
               <ExplorerRow
                 key={m.uci}
+                kind="move"
                 move={m}
                 totalAll={totalGames}
                 highlighted={m.uci === highlightedUci}
                 onPlay={() => playUci(m.uci)}
               />
             ))}
-            {(() => {
-              const total = totalGames;
-              const wPct = total > 0 ? (data.white / total) * 100 : 0;
-              const dPct = total > 0 ? (data.draws / total) * 100 : 0;
-              const bPct = total > 0 ? (data.black / total) * 100 : 0;
-              return (
-                <tr className="explorer__row explorer__row--summary" aria-label="Total games summary">
-                  <td className="col-move">
-                    <span className="explorer__san">Σ</span>
-                  </td>
-                  <td className="col-games">
-                    <div className="explorer__games">
-                      <span className="explorer__games-pct">100%</span>
-                      <span className="explorer__games-count">{formatGamesCount(total)}</span>
-                    </div>
-                  </td>
-                  <td className="col-results">
-                    <div
-                      className="explorer__bar"
-                      title={`W ${wPct.toFixed(0)}% / D ${dPct.toFixed(0)}% / B ${bPct.toFixed(0)}%`}
-                    >
-                      {wPct > 0 && (
-                        <span className="explorer__bar-w" style={{ width: `${wPct}%` }}>
-                          {wPct >= 12 ? `${Math.round(wPct)}%` : ''}
-                        </span>
-                      )}
-                      {dPct > 0 && (
-                        <span className="explorer__bar-d" style={{ width: `${dPct}%` }}>
-                          {dPct >= 12 ? `${Math.round(dPct)}%` : ''}
-                        </span>
-                      )}
-                      {bPct > 0 && (
-                        <span className="explorer__bar-b" style={{ width: `${bPct}%` }}>
-                          {bPct >= 12 ? `${Math.round(bPct)}%` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })()}
+            <ExplorerRow
+              kind="summary"
+              white={data.white}
+              draws={data.draws}
+              black={data.black}
+            />
           </tbody>
           </table>
         </>
@@ -276,19 +242,77 @@ export function ExplorerPanel() {
   );
 }
 
-interface ExplorerRowProps {
-  move: ExplorerMove;
-  totalAll: number;
-  highlighted?: boolean;
-  onPlay: () => void;
+interface ResultsBarProps {
+  white: number;
+  draws: number;
+  black: number;
 }
 
-function ExplorerRow({ move, totalAll, highlighted = false, onPlay }: ExplorerRowProps) {
+function ResultsBar({ white, draws, black }: ResultsBarProps) {
+  const total = white + draws + black;
+  const wPct = total > 0 ? (white / total) * 100 : 0;
+  const dPct = total > 0 ? (draws / total) * 100 : 0;
+  const bPct = total > 0 ? (black / total) * 100 : 0;
+  return (
+    <div className="explorer__bar" title={`W ${wPct.toFixed(0)}% / D ${dPct.toFixed(0)}% / B ${bPct.toFixed(0)}%`}>
+      {wPct > 0 && (
+        <span className="explorer__bar-w" style={{ width: `${wPct}%` }}>
+          {wPct >= 12 ? `${Math.round(wPct)}%` : ''}
+        </span>
+      )}
+      {dPct > 0 && (
+        <span className="explorer__bar-d" style={{ width: `${dPct}%` }}>
+          {dPct >= 12 ? `${Math.round(dPct)}%` : ''}
+        </span>
+      )}
+      {bPct > 0 && (
+        <span className="explorer__bar-b" style={{ width: `${bPct}%` }}>
+          {bPct >= 12 ? `${Math.round(bPct)}%` : ''}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type ExplorerRowProps =
+  | {
+      kind: 'move';
+      move: ExplorerMove;
+      totalAll: number;
+      highlighted?: boolean;
+      onPlay: () => void;
+    }
+  | {
+      kind: 'summary';
+      white: number;
+      draws: number;
+      black: number;
+    };
+
+function ExplorerRow(props: ExplorerRowProps) {
+  if (props.kind === 'summary') {
+    const total = props.white + props.draws + props.black;
+    return (
+      <tr className="explorer__row explorer__row--summary" aria-label="Total games summary">
+        <td className="col-move">
+          <span className="explorer__san">Σ</span>
+        </td>
+        <td className="col-games">
+          <div className="explorer__games">
+            <span className="explorer__games-pct">100%</span>
+            <span className="explorer__games-count">{formatGamesCount(total)}</span>
+          </div>
+        </td>
+        <td className="col-results">
+          <ResultsBar white={props.white} draws={props.draws} black={props.black} />
+        </td>
+      </tr>
+    );
+  }
+
+  const { move, totalAll, highlighted = false, onPlay } = props;
   const total = move.white + move.draws + move.black;
   const pctOfAll = totalAll > 0 ? (total / totalAll) * 100 : 0;
-  const wPct = total > 0 ? (move.white / total) * 100 : 0;
-  const dPct = total > 0 ? (move.draws / total) * 100 : 0;
-  const bPct = total > 0 ? (move.black / total) * 100 : 0;
 
   function handleKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -313,23 +337,7 @@ function ExplorerRow({ move, totalAll, highlighted = false, onPlay }: ExplorerRo
         </div>
       </td>
       <td className="col-results">
-        <div className="explorer__bar" title={`W ${wPct.toFixed(0)}% / D ${dPct.toFixed(0)}% / B ${bPct.toFixed(0)}%`}>
-          {wPct > 0 && (
-            <span className="explorer__bar-w" style={{ width: `${wPct}%` }}>
-              {wPct >= 12 ? `${Math.round(wPct)}%` : ''}
-            </span>
-          )}
-          {dPct > 0 && (
-            <span className="explorer__bar-d" style={{ width: `${dPct}%` }}>
-              {dPct >= 12 ? `${Math.round(dPct)}%` : ''}
-            </span>
-          )}
-          {bPct > 0 && (
-            <span className="explorer__bar-b" style={{ width: `${bPct}%` }}>
-              {bPct >= 12 ? `${Math.round(bPct)}%` : ''}
-            </span>
-          )}
-        </div>
+        <ResultsBar white={move.white} draws={move.draws} black={move.black} />
       </td>
     </tr>
   );
